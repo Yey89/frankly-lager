@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Frankly Lager</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#111110">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Frankly Lager">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Laden -->
+<div class="screen" id="boot"><span class="loading">Frankly Lager wird geladen …</span></div>
+
+<!-- Anmelden -->
+<div class="screen" id="login" hidden>
+  <form class="loginbox form" id="loginForm" novalidate>
+    <div class="mark">0–100 <b style="color:var(--red)">Frankly</b></div>
+    <div class="sub">Lager · Anmelden</div>
+    <label>E-Mail<input id="email" type="email" autocomplete="username" required></label>
+    <label>Passwort<input id="password" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="loginErr"></p>
+    <button class="btn primary" id="loginBtn" type="submit">Anmelden</button>
+    <p class="hint">Du bleibst auf diesem Gerät angemeldet, bis du dich abmeldest.</p>
+  </form>
+</div>
+
+<!-- App -->
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div class="brand">
+      <div class="mark">0–100 <b>Frankly</b></div>
+      <div class="sub">Lager</div>
+    </div>
+    <div class="headbtns">
+      <button class="btn ghost" id="logoutBtn" type="button">Abmelden</button>
+      <button class="btn primary" id="addBtn" type="button">+ Teil erfassen</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-items" aria-selected="true" type="button">Teile <span class="n" id="cntItems"></span></button>
+    <button class="tab" role="tab" id="tab-looks" aria-selected="false" type="button">Looks <span class="n" id="cntLooks"></span></button>
+  </nav>
+
+  <section id="viewItems">
+    <div class="tools">
+      <input class="search" id="q" type="search" placeholder="Suchen: Nummer, Titel, Marke, Farbe …" aria-label="Teile durchsuchen">
+      <div class="chips" id="cats"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="viewLooks" hidden>
+    <div class="tools" style="justify-content:space-between">
+      <span class="hint" style="flex:1 1 280px;max-width:62ch">Ein Look kombiniert mehrere Teile. Der Style (EDGY, FIERCE, DREAMY, AGILE) gehört zum Look, nicht zum einzelnen Teil.</span>
+      <button class="btn" id="addLookBtn" type="button">+ Look erstellen</button>
+    </div>
+    <div class="looks" id="lookGrid"></div>
+  </section>
+
+  <footer>
+    <span id="foot">0–100 Frankly · Lager</span>
+    <button class="btn ghost" id="reloadBtn" type="button">Neu laden</button>
+  </footer>
+</div>
+
+<div class="ov" id="ov" hidden><div class="panel" id="panel" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"></script>
+<script>
+  if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
+</script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
