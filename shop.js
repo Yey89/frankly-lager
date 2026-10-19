@@ -26,7 +26,7 @@ const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "A
 
 const CFG = window.FRANKLY_CONFIG;
 const $ = id => document.getElementById(id);
-let sb = null, ITEMS = [], OWNERS = [], LOOKS = [], URLS = {}, cat = "Alle";
+let sb = null, ITEMS = [], OWNERS = [], LOOKS = [], RENT = {}, URLS = {}, cat = "Alle";
 
 /* ---------- Hilfen ---------- */
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -45,9 +45,11 @@ function uuid() {
   const h = [...b].map(x => x.toString(16).padStart(2, "0")).join("");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
-function badge(st) {
-  if (st === "Reserviert") return `<span class="pill">Reserviert</span>`;
-  if (st === "Vermietet") return `<span class="pill muted">Gerade unterwegs</span>`;
+function shortDate(s) { if (!s) return ""; const [y, m, d] = String(s).slice(0, 10).split("-"); return `${d}.${m}.`; }
+function rentText(it) { const r = RENT[it.id]; return r && r.bis ? `Vermietet bis ${shortDate(r.bis)}` : "Gerade vermietet"; }
+function badge(it) {
+  if (it.status === "Reserviert") return `<span class="pill">Reserviert</span>`;
+  if (it.status === "Vermietet") return `<span class="pill muted">${esc(rentText(it))}</span>`;
   return "";
 }
 
@@ -79,6 +81,11 @@ async function load() {
   ITEMS = a.data || [];
   OWNERS = b.error ? [] : (b.data || []);
   const ids = new Set(ITEMS.map(i => i.id));
+  RENT = {};
+  if (ITEMS.some(i => i.status === "Vermietet")) {
+    const r = await sb.from("vermietungen").select("item_id,von,bis,zurueck_am").is("zurueck_am", null);
+    (r.data || []).forEach(x => { const cur = RENT[x.item_id]; if (!cur || String(x.von) > String(cur.von)) RENT[x.item_id] = x; });
+  }
   LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length);
   const paths = [...new Set(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)).filter(Boolean))];
   for (let i = 0; i < paths.length; i += 100) {
@@ -93,7 +100,7 @@ function card(it) {
     <button class="card" type="button" data-item="${esc(it.nr)}">
       <div class="ph">${imgTag(it.foto_pfad, it.titel)}<span class="tag">${esc(it.nr)}</span></div>
       <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price">${esc(chf(it.preis))}</span></div>
-      <div class="line2">${badge(it.status)}<span>${esc(known(it.groesse) ? "Gr. " + clean(it.groesse) : (it.unterkategorie || it.kategorie || ""))}</span></div>
+      <div class="line2">${badge(it)}<span>${esc(known(it.groesse) ? "Gr. " + clean(it.groesse) : (it.unterkategorie || it.kategorie || ""))}</span></div>
     </button>`;
 }
 function renderFilters() {
@@ -153,8 +160,8 @@ function showItem(nr) {
       <div>
         <div class="nr"><small>Nummer</small>${esc(it.nr)}</div>
         <h2 class="dt">${esc(it.titel)}</h2>
-        <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it.status)}</div>
-        ${it.status === "Vermietet" ? `<p class="hint">Dieses Teil ist gerade vermietet und bald wieder im Laden.</p>` : ""}
+        <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}</div>
+        ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? `Dieses Teil ist bis ${esc(shortDate(RENT[it.id].bis))} vermietet und danach wieder im Laden.` : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
         ${it.status === "Reserviert" ? `<p class="hint">Dieses Teil ist für jemanden reserviert.</p>` : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
