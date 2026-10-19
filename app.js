@@ -101,29 +101,45 @@ function ownerName(id) { const o = ownerOf(id); return o ? o.profilname : (id ||
 function ownerProv(id) { const o = ownerOf(id); return o ? Number(o.provision_prozent) : 10; }
 function ownerOptions(sel) { return OWNERS.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? "selected" : ""}>${esc(o.profilname)} · ${esc(o.id)}</option>`).join(""); }
 function itemOwner(itemId) { const it = ITEMS.find(x => x.id === itemId); return it ? it.owner_id : null; }
-/* Offene Beträge, die einer Owner noch ausbezahlt werden müssen */
-function openPosts(oid) {
+/* ---------- Geld: Verkäufe & Mieten ----------
+   Provision = Anteil Frankly (z.B. 10 %). Owner erhält den Rest (z.B. 90 %).
+   Bei eigenen Teilen (OWN-001) geht alles an Frankly. */
+function saleAmount(i) { return i.verkauf_preis != null ? Number(i.verkauf_preis) : (i.preis != null ? Number(i.preis) : null); }
+function saleDate(i) { return i.verkauf_datum || (i.updated_at ? String(i.updated_at).slice(0, 10) : null); }
+function itemProv(i) { return i.owner_id === SELF ? 100 : (i.verkauf_provision != null ? Number(i.verkauf_provision) : ownerProv(i.owner_id)); }
+/* Alle Buchungen (Verkauf + Miete), optional nur einer Owner */
+function allPosts(oid) {
   const posts = [];
-  ITEMS.filter(i => i.owner_id === oid && i.status === "Verkauft" && i.verkauf_preis != null && !i.ausbezahlt_am).forEach(i => {
-    const prov = i.verkauf_provision != null ? Number(i.verkauf_provision) : ownerProv(oid);
-    posts.push({ kind: "item", id: i.id, nr: i.nr, titel: i.titel, art: "Verkauf", betrag: Number(i.verkauf_preis), prov, anteil: share(i.verkauf_preis, prov), datum: i.verkauf_datum, faellig: payoutDate(i.verkauf_datum) });
+  ITEMS.filter(i => i.status === "Verkauft" && (!oid || i.owner_id === oid)).forEach(i => {
+    const b = saleAmount(i); if (b == null) return;
+    const prov = itemProv(i), anteil = i.owner_id === SELF ? 0 : share(b, prov);
+    posts.push({ kind: "item", id: i.id, itemId: i.id, owner: i.owner_id, nr: i.nr, titel: i.titel, art: "Verkauf", betrag: b, prov,
+      anteil, frankly: round2(b - anteil), datum: saleDate(i), paid: i.ausbezahlt_am || null, missingPrice: i.verkauf_preis == null });
   });
-  RENTALS.filter(r => !r.ausbezahlt_am && itemOwner(r.item_id) === oid).forEach(r => {
-    const it = ITEMS.find(x => x.id === r.item_id) || {};
-    posts.push({ kind: "rental", id: r.id, nr: it.nr, titel: it.titel, art: "Miete", betrag: Number(r.betrag), prov: Number(r.provision_prozent), anteil: share(r.betrag, r.provision_prozent), datum: r.von, faellig: payoutDate(r.von) });
+  RENTALS.forEach(r => {
+    const it = ITEMS.find(x => x.id === r.item_id); if (!it) return;
+    if (oid && it.owner_id !== oid) return;
+    const prov = it.owner_id === SELF ? 100 : Number(r.provision_prozent), b = Number(r.betrag), anteil = it.owner_id === SELF ? 0 : share(b, prov);
+    posts.push({ kind: "rental", id: r.id, itemId: it.id, owner: it.owner_id, nr: it.nr, titel: it.titel, art: "Miete", betrag: b, prov,
+      anteil, frankly: round2(b - anteil), datum: r.von, paid: r.ausbezahlt_am || null });
   });
-  return posts.sort((a, b) => a.faellig - b.faellig);
+  return posts.sort((a, b) => String(b.datum || "").localeCompare(String(a.datum || "")));
 }
+function openPosts(oid) { return oid === SELF ? [] : allPosts(oid).filter(p => !p.paid); }
+function sum(arr, k) { return round2(arr.reduce((s, p) => s + (Number(p[k]) || 0), 0)); }
 function ownerStats(oid) {
-  const its = ITEMS.filter(i => i.owner_id === oid);
+  const its = ITEMS.filter(i => i.owner_id === oid), posts = allPosts(oid);
   return {
     total: its.length,
     shop: its.filter(i => IN_SHOP.includes(i.status)).length,
     sold: its.filter(i => i.status === "Verkauft").length,
     due: its.filter(i => { const p = phaseInfo(i); return p && p.state === "due"; }).length,
-    open: round2(openPosts(oid).reduce((s, p) => s + p.anteil, 0))
+    earned: sum(posts, "anteil"),
+    paid: sum(posts.filter(p => p.paid), "anteil"),
+    open: sum(posts.filter(p => !p.paid), "anteil")
   };
 }
+function splitLabel(o) { const p = Number(o.provision_prozent); return `${100 - p} % Owner · ${p} % Frankly`; }
 
 /* ---------- Start & Anmeldung ---------- */
 function show(which) { $("boot").hidden = which !== "boot"; $("login").hidden = which !== "login"; $("app").hidden = which !== "app"; }
@@ -268,11 +284,11 @@ function renderOwners() {
     const s = ownerStats(o.id);
     return `
     <button class="ocard" type="button" data-owner="${esc(o.id)}">
-      <div class="otop"><span class="oid">${esc(o.id)}</span>${o.id === SELF ? `<span class="pill">Eigene Teile</span>` : `<span class="pill">${esc(Number(o.provision_prozent))} % Provision</span>`}</div>
+      <div class="otop"><span class="oid">${esc(o.id)}</span>${o.id === SELF ? `<span class="pill">Eigene Teile</span>` : `<span class="pill">${esc(100 - Number(o.provision_prozent))} / ${esc(Number(o.provision_prozent))}</span>`}</div>
       <span class="oname">${esc(o.profilname)}</span>
       <div class="ostats">
         <span><b>${s.shop}</b> im Laden</span><span><b>${s.sold}</b> verkauft</span>
-        ${o.id !== SELF ? `<span class="${s.open > 0 ? "warn" : ""}"><b>${esc(chf(s.open))}</b> offen</span>` : ""}
+        ${o.id !== SELF ? `<span><b>${esc(chf(s.earned))}</b> verdient</span><span class="${s.open > 0 ? "warn" : ""}"><b>${esc(chf(s.open))}</b> offen</span>` : `<span><b>${esc(chf(franklyTotals("all").total))}</b> Einnahmen</span>`}
         ${s.due ? `<span class="warn"><b>${s.due}</b> Entscheid fällig</span>` : ""}
       </div>
     </button>`;
@@ -341,8 +357,8 @@ function saleBlock(it) {
   const prov = it.verkauf_provision != null ? Number(it.verkauf_provision) : ownerProv(it.owner_id);
   const self = it.owner_id === SELF;
   return `<div class="box"><div class="sec" style="margin:0 0 6px">Verkauf</div>
-    <dl class="f compact"><dt>Verkauft am</dt><dd>${esc(fmt(it.verkauf_datum) || "–")}</dd><dt>Verkaufspreis</dt><dd>${esc(chf(it.verkauf_preis))}</dd>
-    ${self ? "" : `<dt>Anteil Owner</dt><dd>${esc(chf(share(it.verkauf_preis, prov)))} <span class="hint">(${100 - prov} %)</span></dd><dt>Ausbezahlt</dt><dd>${it.ausbezahlt_am ? esc(fmt(it.ausbezahlt_am)) : `<span class="warn">offen · fällig ${esc(fmt(payoutDate(it.verkauf_datum)))}</span>`}</dd>`}</dl></div>`;
+    <dl class="f compact"><dt>Verkauft am</dt><dd>${esc(fmt(it.verkauf_datum) || "–")}</dd><dt>Verkaufspreis</dt><dd>${esc(chf(saleAmount(it)))}</dd>
+    ${self ? "" : `<dt>An ${esc(ownerName(it.owner_id))}</dt><dd>${esc(chf(share(saleAmount(it), prov)))} <span class="hint">(${100 - prov} %)</span></dd><dt>Ausbezahlt</dt><dd>${it.ausbezahlt_am ? esc(fmt(it.ausbezahlt_am)) : `<span class="warn">offen</span>`}</dd>`}</dl></div>`;
 }
 function rentalBlock(it) {
   const rs = RENTALS.filter(r => r.item_id === it.id).sort((a, b) => String(b.von).localeCompare(String(a.von)));
@@ -442,6 +458,15 @@ async function saveEdit(id, btn) {
   });
   if (!patch.titel) { toast("Der Titel darf nicht leer sein."); return; }
   if (!patch.owner_id) patch.owner_id = SELF;
+  const old = ITEMS.find(x => x.id === id) || {};
+  if (patch.status === "Verkauft" && old.status !== "Verkauft") {
+    patch.verkauf_preis = old.verkauf_preis != null ? old.verkauf_preis : patch.preis;
+    patch.verkauf_datum = old.verkauf_datum || iso(today());
+    patch.verkauf_provision = ownerProv(patch.owner_id);
+  }
+  if (patch.status !== "Verkauft" && old.status === "Verkauft" && !old.ausbezahlt_am) {
+    Object.assign(patch, { verkauf_preis: null, verkauf_datum: null, verkauf_provision: null });
+  }
   busy(btn, true);
   const ok = await patchItem(id, patch, "Gespeichert");
   busy(btn, false);
@@ -495,7 +520,7 @@ function openAction(kind, it) {
       <label>Datum<input id="a-datum" type="date" value="${iso(today())}"></label></div>
       ${self ? "" : `<p class="hint" id="a-info"></p>`}
       <div class="rowsmall"><button class="btn primary" type="submit">Als verkauft speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
-    const upd = () => { const i = $("a-info"); if (!i) return; const p = parsePrice($("a-preis").value); i.textContent = p == null ? "" : `Anteil ${ownerName(it.owner_id)}: ${chf(share(p, prov))} (${100 - prov} %) · Frankly: ${chf(round2(p - share(p, prov)))} · Auszahlung ${fmt(payoutDate($("a-datum").value))}`; };
+    const upd = () => { const i = $("a-info"); if (!i) return; const p = parsePrice($("a-preis").value); i.textContent = p == null ? "" : `An ${ownerName(it.owner_id)}: ${chf(share(p, prov))} (${100 - prov} %) · Frankly: ${chf(round2(p - share(p, prov)))} (${prov} %)`; };
     $("a-preis").addEventListener("input", upd); $("a-datum").addEventListener("input", upd); upd();
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const p = parsePrice($("a-preis").value);
@@ -588,31 +613,79 @@ async function runAct(kind, btn) {
 }
 
 /* ---------- Owner ---------- */
+function postTable(posts, cols) {
+  if (!posts.length) return `<p class="hint">Noch keine Verkäufe oder Mieten.</p>`;
+  const head = { datum: "Datum", teil: "Teil", owner: "Owner", art: "Art", betrag: "Betrag", anteil: "An Owner", frankly: "Frankly", status: "Status" };
+  const cell = (p, c) => {
+    if (c === "datum") return esc(p.datum ? fmt(p.datum).slice(3) : "–");
+    if (c === "teil") return `<button class="linkbtn" type="button" data-item="${esc(p.itemId)}">${esc(p.nr || "")}</button> ${esc(p.titel || "")}${p.missingPrice ? ` <span class="hint">(Listenpreis)</span>` : ""}`;
+    if (c === "owner") return `<button class="linkbtn" type="button" data-owner="${esc(p.owner)}">${esc(ownerName(p.owner))}</button>`;
+    if (c === "art") return p.art;
+    if (c === "betrag") return esc(chf(p.betrag));
+    if (c === "anteil") return `<b>${esc(chf(p.anteil))}</b>`;
+    if (c === "frankly") return `<b>${esc(chf(p.frankly))}</b>`;
+    if (c === "status") return p.paid ? `ausbezahlt ${esc(fmt(p.paid).slice(3, 9))}` : `<span class="warn">offen</span>`;
+  };
+  return `<div class="tablewrap"><table class="tbl"><thead><tr>${cols.map(c => `<th>${head[c]}</th>`).join("")}</tr></thead>
+    <tbody>${posts.map(p => `<tr>${cols.map(c => `<td>${cell(p, c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+/* Einnahmen Frankly: eigene Verkäufe (100 %) + Provisionen von Owners */
+let fPeriod = "month";
+function inPeriod(p, period) {
+  if (period === "all") return true;
+  const d = parseD(p.datum), t = today();
+  return d && d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth();
+}
+function franklyTotals(period) {
+  const posts = allPosts().filter(p => inPeriod(p, period));
+  const own = posts.filter(p => p.owner === SELF), prov = posts.filter(p => p.owner !== SELF);
+  return { own, prov, ownSum: sum(own, "frankly"), provSum: sum(prov, "frankly"), total: round2(sum(own, "frankly") + sum(prov, "frankly")), owed: sum(prov.filter(p => !p.paid), "anteil") };
+}
+function franklyBlock() {
+  const t = franklyTotals(fPeriod), mLabel = MONTHS[today().getMonth()] + " " + today().getFullYear();
+  const byOwner = {};
+  t.prov.forEach(p => { const o = byOwner[p.owner] = byOwner[p.owner] || { umsatz: 0, frankly: 0, offen: 0, n: 0 }; o.umsatz += p.betrag; o.frankly += p.frankly; o.n++; if (!p.paid) o.offen += p.anteil; });
+  const rows = Object.keys(byOwner).sort().map(id => { const o = byOwner[id]; return `<tr><td><button class="linkbtn" type="button" data-owner="${esc(id)}">${esc(ownerName(id))}</button></td><td>${o.n}</td><td>${esc(chf(round2(o.umsatz)))}</td><td><b>${esc(chf(round2(o.frankly)))}</b></td><td class="${o.offen > 0 ? "warn" : ""}">${esc(chf(round2(o.offen)))}</td></tr>`; }).join("");
+  return `
+    <div class="periodsw" role="group" aria-label="Zeitraum">
+      <button class="chip" type="button" data-period="month" aria-pressed="${fPeriod === "month"}">${esc(mLabel)}</button>
+      <button class="chip" type="button" data-period="all" aria-pressed="${fPeriod === "all"}">Gesamt</button>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span class="klabel">Eigene Teile · 100 %</span><span class="kval">${esc(chf(t.ownSum))}</span><span class="hint">${t.own.length} Verkäufe/Mieten</span></div>
+      <div class="kpi"><span class="klabel">Provision von Owners</span><span class="kval">${esc(chf(t.provSum))}</span><span class="hint">${t.prov.length} Verkäufe/Mieten</span></div>
+      <div class="kpi strong"><span class="klabel">Total Frankly</span><span class="kval">${esc(chf(t.total))}</span><span class="hint">An Owners noch offen: ${esc(chf(t.owed))}</span></div>
+    </div>
+    <div class="sec">Provision nach Owner</div>
+    ${rows ? `<div class="tablewrap"><table class="tbl"><thead><tr><th>Owner</th><th>Anzahl</th><th>Umsatz</th><th>Frankly</th><th>An Owner offen</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="hint">In diesem Zeitraum noch keine Verkäufe von Owners.</p>`}
+    <div class="sec">Detail Provisionen</div>
+    ${postTable(t.prov, ["datum", "teil", "owner", "art", "betrag", "frankly", "anteil"])}
+    <div class="sec">Detail eigene Verkäufe & Mieten</div>
+    ${postTable(t.own, ["datum", "teil", "art", "betrag"])}`;
+}
 function showOwner(oid) {
   const o = ownerOf(oid); if (!o) return closePanel();
-  const s = ownerStats(oid), posts = oid === SELF ? [] : openPosts(oid), total = round2(posts.reduce((a, p) => a + p.anteil, 0));
-  const its = ITEMS.filter(i => i.owner_id === oid).sort((a, b) => a.nr_num - b.nr_num);
-  const dueTotal = round2(posts.filter(p => p.faellig <= today()).reduce((a, p) => a + p.anteil, 0));
+  const s = ownerStats(oid), its = ITEMS.filter(i => i.owner_id === oid).sort((a, b) => a.nr_num - b.nr_num);
+  const self = oid === SELF, posts = self ? [] : allPosts(oid);
   openPanel(`
     <div class="phead"><span class="sub">Owner</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="nr"><small>Owner</small>${esc(o.id)}</div>
     <h2 class="dt">${esc(o.profilname)}</h2>
     <p class="desc">${esc(o.stil || "")}</p>
     <div class="ostats lg"><span><b>${s.total}</b> Teile</span><span><b>${s.shop}</b> im Laden</span><span><b>${s.sold}</b> verkauft</span>${s.due ? `<span class="warn"><b>${s.due}</b> Entscheid fällig</span>` : ""}</div>
-    ${oid === SELF ? `<p class="hint">Eigene Teile von Frankly: keine Provision, keine Abrechnung.</p>` : `
-    <div class="box ${total > 0 ? "alert" : ""}">
-      <div class="sec" style="margin:0 0 6px">Abrechnung · offen ${esc(chf(total))}</div>
-      ${posts.length ? `
-      <div class="tablewrap"><table class="tbl">
-        <thead><tr><th>Teil</th><th>Art</th><th>Betrag</th><th>Anteil</th><th>Fällig</th></tr></thead>
-        <tbody>${posts.map(p => `<tr><td><button class="linkbtn" type="button" data-item="${esc(p.kind === "item" ? p.id : (RENTALS.find(r => r.id === p.id) || {}).item_id)}">${esc(p.nr || "")}</button> ${esc(p.titel || "")}</td><td>${p.art}</td><td>${esc(chf(p.betrag))}</td><td><b>${esc(chf(p.anteil))}</b></td><td class="${p.faellig <= today() ? "warn" : ""}">${esc(fmt(p.faellig))}</td></tr>`).join("")}</tbody>
-      </table></div>
-      <p class="hint">Davon heute fällig: ${esc(chf(dueTotal))}. Anteil Owner = Betrag minus ${esc(Number(o.provision_prozent))} % Provision.</p>
-      <div class="rowsmall"><button class="btn primary" type="button" data-payout="${esc(oid)}">Alles Offene als ausbezahlt markieren</button></div>`
-      : `<p class="hint">Nichts offen. Alles ist ausbezahlt.</p>`}
+    ${self ? `<div class="box"><div class="sec" style="margin:0 0 8px">Einnahmen Frankly</div><div id="fblock">${franklyBlock()}</div></div>` : `
+    <div class="box ${s.open > 0 ? "alert" : ""}">
+      <div class="sec" style="margin:0 0 8px">Abrechnung · ${esc(splitLabel(o))}</div>
+      <div class="kpis">
+        <div class="kpi"><span class="klabel">Verdient bisher</span><span class="kval">${esc(chf(s.earned))}</span><span class="hint">${posts.length} Verkäufe/Mieten</span></div>
+        <div class="kpi"><span class="klabel">Ausbezahlt</span><span class="kval">${esc(chf(s.paid))}</span></div>
+        <div class="kpi ${s.open > 0 ? "strong" : ""}"><span class="klabel">Schulde ich ihr</span><span class="kval">${esc(chf(s.open))}</span></div>
+      </div>
+      ${postTable(posts, ["datum", "teil", "art", "betrag", "anteil", "frankly", "status"])}
+      ${s.open > 0 ? `<div class="rowsmall"><button class="btn primary" type="button" data-payout="${esc(oid)}">${esc(chf(s.open))} als ausbezahlt markieren</button></div>` : ""}
     </div>`}
     <dl class="f">
-      <dt>Provision</dt><dd>${esc(Number(o.provision_prozent))} %</dd>
+      ${self ? "" : `<dt>Aufteilung</dt><dd>${esc(splitLabel(o))}</dd>`}
       <dt>Voller Name</dt><dd>${esc(o.voller_name || "–")}</dd>
       <dt>E-Mail</dt><dd>${esc(o.email || "–")}</dd>
       <dt>Telefon</dt><dd>${esc(o.telefon || "–")}</dd>
@@ -621,7 +694,7 @@ function showOwner(oid) {
       <dt>Vereinbarung</dt><dd>${esc(fmt(o.vereinbarung_datum) || "–")}</dd>
       <dt>Notiz</dt><dd>${esc(o.notiz || "–")}</dd>
     </dl>
-    <div class="row"><button class="btn" type="button" data-oedit="${esc(oid)}">Bearbeiten</button>${oid !== SELF ? `<button class="btn danger" type="button" data-odel="${esc(oid)}">Löschen</button>` : ""}</div>
+    <div class="row"><button class="btn" type="button" data-oedit="${esc(oid)}">Bearbeiten</button>${self ? "" : `<button class="btn danger" type="button" data-odel="${esc(oid)}">Löschen</button>`}</div>
     <div class="sec">Teile von ${esc(o.profilname)}</div>
     ${its.length ? `<div class="grid">${its.map(itemCard).join("")}</div>` : `<p class="hint">Noch keine Teile.</p>`}
   `, { type: "owner", id: oid });
@@ -641,9 +714,9 @@ function ownerForm(o) {
       <div class="sec" style="margin:8px 0 0">Intern · nie öffentlich</div>
       <label>Voller Name<input id="o-voller_name" value="${esc(o.voller_name || "")}"></label>
       <div class="two"><label>E-Mail<input id="o-email" type="email" value="${esc(o.email || "")}"></label><label>Telefon<input id="o-telefon" type="tel" value="${esc(o.telefon || "")}"></label></div>
-      <div class="two"><label>Provision %<input id="o-provision_prozent" inputmode="decimal" value="${esc(o.provision_prozent ?? 10)}"></label><label>Vereinbarung vom<input id="o-vereinbarung_datum" type="date" value="${esc(o.vereinbarung_datum || "")}"></label></div>
+      <div class="two"><label>Anteil Frankly %<input id="o-provision_prozent" inputmode="decimal" value="${esc(o.provision_prozent ?? 10)}"></label><label>Vereinbarung vom<input id="o-vereinbarung_datum" type="date" value="${esc(o.vereinbarung_datum || "")}"></label></div>
       <label>Notiz<textarea id="o-notiz" rows="2">${esc(o.notiz || "")}</textarea></label>
-      <p class="hint">Bankdaten (IBAN) bitte nicht hier speichern, sondern im E-Banking.</p>
+      <p class="hint">Anteil Frankly = deine Provision. Bei 10 % erhält die Owner 90 % jedes Verkaufs und jeder Miete. Bankdaten (IBAN) bitte nicht hier speichern, sondern im E-Banking.</p>
       <div class="row" style="margin-top:0"><button class="btn primary" type="submit">${isNew ? "Owner anlegen" : "Speichern"}</button></div>
     </form>`, { type: "ownerform", id: o.id });
   $("ownerForm").addEventListener("submit", async e => {
@@ -893,6 +966,7 @@ document.addEventListener("click", e => {
   if (d.save) return saveEdit(d.save, b);
   if (d.del) return deleteItem(d.del, b);
   if (d.dellook) return deleteLook(d.dellook, b);
+  if (d.period) { fPeriod = d.period; const fb = $("fblock"); if (fb) fb.innerHTML = franklyBlock(); return; }
   if (d.payout) return payout(d.payout, b);
   if (d.oedit) return ownerForm(ownerOf(d.oedit));
   if (d.odel) return deleteOwner(d.odel, b);

@@ -185,3 +185,9 @@ img{max-width:100%}
 .form label.check,label.check{display:flex;gap:10px;align-items:flex-start;text-transform:none;letter-spacing:0;font-family:var(--body);font-size:14px;color:var(--ink)}
 label.check input{width:auto;margin-top:3px}
 .box + dl.f,.box + .row{margin-top:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:4px 0 12px}
+.kpi{border:1px solid var(--line);background:var(--bg);padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi.strong{border-color:var(--ink)}
+.klabel{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kval{font-family:var(--mono);font-weight:600;font-size:22px;font-variant-numeric:tabular-nums}
+.periodsw{display:flex;gap:6px;margin-bottom:10px}
