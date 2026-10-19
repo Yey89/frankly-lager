@@ -3,97 +3,159 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Frankly Lager</title>
-<meta name="robots" content="noindex, nofollow">
+<title>0–100 Frankly · Second Hand Among Friends</title>
+<meta name="description" content="Secondhand unter Freundinnen in Zürich. Stöbere durch die Teile im Laden, entdecke Looks oder bring deine eigenen Kleider.">
 <meta name="theme-color" content="#111110">
-<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Frankly Lager">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta property="og:title" content="0–100 Frankly · Second Hand Among Friends">
+<meta property="og:description" content="Secondhand unter Freundinnen in Zürich. 0 bis 100 Franken, ehrlich gesagt.">
+<meta property="og:image" content="icon-512.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="shop.css">
 </head>
-<body>
+<body class="shop">
 
-<!-- Laden -->
-<div class="screen" id="boot"><span class="loading">Frankly Lager wird geladen …</span></div>
+<header class="stop">
+  <div class="wrap stop-in">
+    <a class="mark" href="./" data-nav="shop">0–100 <b>Frankly</b></a>
+    <nav class="snav" aria-label="Hauptnavigation">
+      <a href="#stoebern" data-nav="shop">Stöbern</a>
+      <a href="#looks" data-nav="looks">Looks</a>
+      <a href="#mitmachen" data-nav="join">Owner werden</a>
+      <a href="#besuch" data-nav="visit">Besuch</a>
+    </nav>
+  </div>
+</header>
 
-<!-- Anmelden -->
-<div class="screen" id="login" hidden>
-  <form class="loginbox form" id="loginForm" novalidate>
-    <div class="mark">0–100 <b style="color:var(--red)">Frankly</b></div>
-    <div class="sub">Lager · Anmelden</div>
-    <label>E-Mail<input id="email" type="email" autocomplete="username" required></label>
-    <label>Passwort<input id="password" type="password" autocomplete="current-password" required></label>
-    <p class="err" id="loginErr"></p>
-    <button class="btn primary" id="loginBtn" type="submit">Anmelden</button>
-    <p class="hint">Du bleibst auf diesem Gerät angemeldet, bis du dich abmeldest.</p>
-  </form>
-</div>
+<main class="wrap">
 
-<!-- App -->
-<div class="wrap" id="app" hidden>
-  <header class="top">
-    <div class="brand">
-      <div class="mark">0–100 <b>Frankly</b></div>
-      <div class="sub">Lager</div>
+  <!-- Stöbern -->
+  <section id="v-shop" class="view">
+    <div class="intro">
+      <h1 class="claim">Second Hand<br>Among Friends</h1>
+      <p class="lead">Kleider aus echten Kleiderschränken, 0 bis 100 Franken. Ehrlich gesagt: nicht mehr und nicht weniger.</p>
+      <p class="where" id="whereLine"></p>
     </div>
-    <div class="headbtns">
-      <button class="btn ghost" id="logoutBtn" type="button">Abmelden</button>
-      <button class="btn primary" id="addBtn" type="button">+ Teil erfassen</button>
-    </div>
-  </header>
-
-  <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tab-items" aria-selected="true" type="button">Teile <span class="n" id="cntItems"></span></button>
-    <button class="tab" role="tab" id="tab-looks" aria-selected="false" type="button">Looks <span class="n" id="cntLooks"></span></button>
-    <button class="tab" role="tab" id="tab-owners" aria-selected="false" type="button">Owner <span class="n" id="cntOwners"></span></button>
-  </nav>
-
-  <section id="viewItems">
     <div class="tools">
-      <input class="search" id="q" type="search" placeholder="Suchen: Nummer, Titel, Marke, Owner …" aria-label="Teile durchsuchen">
-      <select class="search fstat" id="fstat" aria-label="Nach Status filtern">
-        <option value="alle">Alle Status</option>
-        <option value="laden">Im Laden</option>
-        <option value="Verfügbar">Verfügbar</option>
-        <option value="Reserviert">Reserviert</option>
-        <option value="Vermietet">Vermietet</option>
-        <option value="Verkauft">Verkauft</option>
-        <option value="Zurückgegeben">Zurückgegeben</option>
-        <option value="faellig">Entscheid fällig</option>
-      </select>
+      <input class="search" id="q" type="search" placeholder="Suchen: Jacke, Levi's, M …" aria-label="Teile durchsuchen">
+      <select class="search fstat" id="fsize" aria-label="Nach Grösse filtern"><option value="">Alle Grössen</option></select>
       <div class="chips" id="cats"></div>
     </div>
-    <div class="grid" id="grid"></div>
+    <div class="grid" id="grid"><p class="loading">Teile werden geladen …</p></div>
   </section>
 
-  <section id="viewLooks" hidden>
-    <div class="tools" style="justify-content:space-between">
-      <span class="hint" style="flex:1 1 280px;max-width:62ch">Ein Look kombiniert mehrere Teile. Der Style (EDGY, FIERCE, DREAMY, AGILE) gehört zum Look, nicht zum einzelnen Teil.</span>
-      <button class="btn" id="addLookBtn" type="button">+ Look erstellen</button>
-    </div>
+  <!-- Looks -->
+  <section id="v-looks" class="view" hidden>
+    <h2 class="vtitle">Looks</h2>
+    <p class="lead">Kombinationen aus Teilen, die gerade im Laden hängen.</p>
     <div class="looks" id="lookGrid"></div>
   </section>
 
-  <section id="viewOwners" hidden>
-    <div class="tools" style="justify-content:space-between">
-      <span class="hint" style="flex:1 1 280px;max-width:62ch">Owner sind die Personen, denen die Teile gehören. Frankly erhält die Provision, der Rest wird am letzten Samstag des Monats ausbezahlt.</span>
-      <button class="btn" id="addOwnerBtn" type="button">+ Owner</button>
+  <!-- Owner werden -->
+  <section id="v-join" class="view" hidden>
+    <h2 class="vtitle">Owner werden</h2>
+    <p class="lead">Dein Kleiderschrank ist zu voll? Bring bis zu 10 Teile zu uns. Wir verkaufen sie 4 Wochen lang im Laden, und du bekommst 90 % vom Verkaufspreis.</p>
+
+    <ol class="steps">
+      <li><b>Anmelden.</b> Mit dem Formular unten. Wir schauen, welche Stile und Grössen in welchem Monat zusammenpassen, und melden uns per E-Mail.</li>
+      <li><b>Bringen.</b> Maximal 10 Teile, sauber und in gutem Zustand. Den Termin für die Abgabe bekommst du mit der Zusage.</li>
+      <li><b>4 Wochen im Laden.</b> Eine Runde läuft vom ersten bis zum letzten Samstag im Monat. Von jedem Verkauf gehen <b>90 % an dich</b> und 10 % an Frankly. Ausbezahlt wird am Ende der Runde.</li>
+      <li><b>Danach entscheidest du</b> für alles, was noch da ist: Preis senken und eine weitere Runde drehen, vor Ort upcyceln (mit Termin) oder zurücknehmen. Abholung ist immer samstags.</li>
+    </ol>
+
+    <div class="rentnote">
+      <span class="klabel">Auch zum Vermieten</span>
+      <p>Abendkleider und Statement Pieces kannst du bei uns auch <b>vermieten</b>. Dafür brauchen wir Fotos. Wir prüfen jedes Teil und sagen dir <b>innerhalb von 24 Stunden</b> zu oder ab. Auch bei Mieten gilt: 90 % für dich, 10 % für Frankly.</p>
     </div>
-    <div class="ogrid" id="ownerGrid"></div>
+
+    <form class="form joinform" id="joinForm" novalidate>
+      <fieldset>
+        <legend>Über dich</legend>
+        <div class="two">
+          <label>Vorname *<input id="j-vorname" autocomplete="given-name" required></label>
+          <label>Nachname<input id="j-nachname" autocomplete="family-name"></label>
+        </div>
+        <div class="two">
+          <label>E-Mail *<input id="j-email" type="email" autocomplete="email" required></label>
+          <label>Telefon<input id="j-telefon" type="tel" autocomplete="tel"></label>
+        </div>
+        <label>Instagram (freiwillig)<input id="j-instagram" placeholder="@name"></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Was bringst du?</legend>
+        <div class="two">
+          <label>Wunschmonat<select id="j-monat"></select></label>
+          <label>Anzahl Teile (max. 10)<select id="j-anzahl"></select></label>
+        </div>
+        <div class="field">
+          <span class="flabel">Was ist dabei? <span class="hint">Mehrere möglich</span></span>
+          <div class="chips" id="j-kat"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Grössen</legend>
+        <p class="hint">Gib die Grösse an, die für die <b>meisten</b> deiner Teile gilt. Wenn du zwischen zwei Grössen liegst, wähl beide, zum Beispiel S und M.</p>
+        <div class="field"><span class="flabel">Oberteile</span><div class="chips" id="j-oben"></div></div>
+        <div class="field"><span class="flabel">Hosen &amp; Röcke</span><div class="chips" id="j-unten"></div></div>
+        <label class="short">Schuhgrösse <span class="hint">nur wenn du Schuhe bringst</span><select id="j-schuhe"></select></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Stil</legend>
+        <p class="hint">Welche Bilder passen am ehesten zu dem, was du bringst? Wähl höchstens zwei.</p>
+        <div class="stiles" id="j-stile"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Vermieten</legend>
+        <label class="check"><input id="j-vermieten" type="checkbox"> Ich möchte auch Abendkleider oder Statement Pieces vermieten.</label>
+        <div id="rentBox" hidden>
+          <div class="field">
+            <span class="flabel">Fotos * <span class="hint">eines pro Teil, mehrere möglich</span></span>
+            <label class="btn" for="j-fotos">Fotos wählen</label>
+            <input id="j-fotos" type="file" accept="image/*" multiple hidden>
+            <div class="thumbs" id="rentThumbs"></div>
+          </div>
+          <label>Kurz beschreiben (freiwillig)<textarea id="j-vtext" rows="2" placeholder="z.B. schwarzes Abendkleid, Grösse 36, einmal getragen"></textarea></label>
+          <p class="hint">Wir prüfen deine Teile und melden uns innerhalb von 24 Stunden mit einer Zu- oder Absage.</p>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Noch etwas?</legend>
+        <label>Nachricht (freiwillig)<textarea id="j-nachricht" rows="3"></textarea></label>
+        <label class="hp" aria-hidden="true">Website<input id="j-website" tabindex="-1" autocomplete="off"></label>
+        <label class="check"><input id="j-ok" type="checkbox"> Ich habe die Bedingungen oben gelesen und bin einverstanden. Meine Angaben werden nur für die Organisation von 0–100 Frankly verwendet. *</label>
+      </fieldset>
+
+      <p class="err" id="joinErr" aria-live="polite"></p>
+      <button class="btn primary big-btn" id="joinBtn" type="submit">Anmeldung senden</button>
+    </form>
+
+    <div class="done" id="joinDone" hidden>
+      <h3 class="vtitle">Danke!</h3>
+      <p class="lead">Deine Anmeldung ist bei uns. Wir melden uns per E-Mail.</p>
+    </div>
   </section>
 
-  <footer>
-    <span id="foot">0–100 Frankly · Lager</span>
-    <button class="btn ghost" id="reloadBtn" type="button">Neu laden</button>
-  </footer>
-</div>
+  <!-- Besuch -->
+  <section id="v-visit" class="view" hidden>
+    <h2 class="vtitle">Besuch</h2>
+    <div class="visit" id="visit"></div>
+  </section>
+
+</main>
+
+<footer class="wrap sfoot">
+  <div id="footInfo"></div>
+  <a class="team" href="lager.html">Team</a>
+</footer>
 
 <div class="ov" id="ov" hidden><div class="panel" id="panel" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" hidden></div>
@@ -103,6 +165,6 @@
   if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
 </script>
 <script src="config.js"></script>
-<script src="app.js"></script>
+<script src="shop.js"></script>
 </body>
 </html>

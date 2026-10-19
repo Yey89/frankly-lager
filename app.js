@@ -22,7 +22,7 @@ const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 const $ = id => document.getElementById(id);
 let sb = null;
-let ITEMS = [], LOOKS = [], OWNERS = [], RENTALS = [], URLS = {};
+let ITEMS = [], LOOKS = [], OWNERS = [], RENTALS = [], ANM = [], URLS = {};
 let cat = "Alle", lastAdded = null, started = false, lastLoad = 0, lastOwner = SELF;
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -188,6 +188,13 @@ async function load() {
   OWNERS = c.data || [];
   RENTALS = d.data || [];
   await signUrls(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)));
+  const an = await sb.from("anmeldungen").select("*").order("created_at", { ascending: false });
+  ANM = an.error ? [] : (an.data || []);
+  const ap = [...new Set(ANM.flatMap(a => a.vermieten_fotos || []))].filter(p => !URLS["anm:" + p]);
+  for (let i = 0; i < ap.length; i += 100) {
+    const r = await sb.storage.from("anmeldungen").createSignedUrls(ap.slice(i, i + 100), 60 * 60 * 12);
+    (r.data || []).forEach(x => { if (x.signedUrl && x.path) URLS["anm:" + x.path] = x.signedUrl; });
+  }
   lastLoad = Date.now();
 }
 async function signUrls(paths) {
@@ -295,11 +302,12 @@ function renderOwners() {
   }).join("");
 }
 function renderAll() {
-  renderCats(); renderGrid(); renderLooks(); renderOwners();
+  renderCats(); renderGrid(); renderLooks(); renderOwners(); renderAnm();
   $("foot").textContent = `0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`;
 }
 function setTab(t) {
-  ["items", "looks", "owners"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  ["items", "looks", "owners", "anm"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  $("viewAnm").hidden = t !== "anm";
   $("viewItems").hidden = t !== "items";
   $("viewLooks").hidden = t !== "looks";
   $("viewOwners").hidden = t !== "owners";
@@ -315,7 +323,7 @@ function openPanel(html, state) {
   const c = panel.querySelector(".close"); if (c) c.focus({ preventScroll: true });
 }
 function closePanel() { ov.hidden = true; panel.innerHTML = ""; panelState = null; document.body.style.overflow = ""; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
-function refreshPanel() { if (!panelState) return; if (panelState.type === "item") showItem(panelState.id); else if (panelState.type === "owner") showOwner(panelState.id); }
+function refreshPanel() { if (!panelState) return; if (panelState.type === "item") showItem(panelState.id); else if (panelState.type === "owner") showOwner(panelState.id); else if (panelState.type === "anm") showAnm(panelState.id); }
 ov.addEventListener("click", e => { if (e.target === ov) closePanel(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !ov.hidden) closePanel(); });
 
@@ -765,6 +773,161 @@ async function deleteOwner(oid, btn) {
   closePanel(); renderAll(); toast(`${oid} gelöscht`);
 }
 
+
+/* ---------- Anmeldungen (Owner werden) ---------- */
+const SHOP_ADR = "Neue Hard 10, 8005 Zürich";
+function anmName(a) { return [a.vorname, a.nachname].filter(Boolean).join(" "); }
+function anmStile(a) { return a.stil_frankly ? [a.stil_frankly] : (a.stile || []); }
+function anmPill(a) {
+  const c = a.status === "Angenommen" ? "ok" : (a.status === "Absage" ? "muted" : (a.status === "Neu" ? "sold" : ""));
+  return `<span class="pill ${c}">${esc(a.status)}${a.status === "Angenommen" && a.status_monat ? " · " + esc(monthLabel(a.status_monat)) : ""}</span>`;
+}
+function monthsAhead(n) { const t = today(), out = []; for (let i = 0; i < n; i++) out.push(iso(new Date(t.getFullYear(), t.getMonth() + i, 1))); return out; }
+function countBy(arr) { const m = {}; arr.forEach(x => { if (x) m[x] = (m[x] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }
+function renderAnm() {
+  const neu = ANM.filter(a => a.status === "Neu").length;
+  $("cntAnm").textContent = neu ? neu + " neu" : ANM.length;
+  $("mplan").innerHTML = monthsAhead(4).map(m => {
+    const acc = ANM.filter(a => a.status === "Angenommen" && a.status_monat && a.status_monat.slice(0, 10) === m);
+    const wish = ANM.filter(a => (a.status === "Neu" || a.status === "Warteliste") && a.wunsch_monat && a.wunsch_monat.slice(0, 10) === m).length;
+    const teile = acc.reduce((s, a) => s + (a.anzahl_teile || 0), 0);
+    const stile = countBy(acc.flatMap(anmStile)), oben = countBy(acc.flatMap(a => (a.groesse_oben || "").split("/"))), unten = countBy(acc.flatMap(a => (a.groesse_unten || "").split("/")));
+    const fmtC = arr => arr.length ? arr.map(([k, n]) => `${n}× ${esc(k)}`).join(" · ") : "–";
+    return `<div class="mcard">
+      <div class="mtop"><span class="oname">${esc(monthLabel(m))}</span><span class="hint">${esc(fmt(firstSat(parseD(m).getFullYear(), parseD(m).getMonth())).slice(3, 9))}–${esc(fmt(lastSat(parseD(m).getFullYear(), parseD(m).getMonth())).slice(3, 9))}</span></div>
+      <div class="ostats"><span><b>${acc.length}</b> Owner</span><span><b>${teile}</b> Teile</span>${acc.some(a => a.vermieten) ? `<span><b>${acc.filter(a => a.vermieten).length}</b> mit Vermieten</span>` : ""}</div>
+      <dl class="f compact"><dt>Stile</dt><dd>${fmtC(stile)}</dd><dt>Oberteile</dt><dd>${fmtC(oben)}</dd><dt>Unterteile</dt><dd>${fmtC(unten)}</dd></dl>
+      ${wish ? `<p class="hint">${wish} weitere ${wish === 1 ? "Anmeldung wünscht" : "Anmeldungen wünschen"} diesen Monat.</p>` : ""}
+    </div>`;
+  }).join("");
+  const f = $("fanm").value;
+  const list = ANM.filter(a => f === "alle" ? true : f === "offen" ? a.status === "Neu" : f === "vermieten" ? a.vermieten : a.status === f);
+  $("anmList").innerHTML = list.length ? list.map(a => `
+    <button class="acard" type="button" data-anm="${esc(a.id)}">
+      <div class="otop"><span class="oname">${esc(anmName(a))}</span>${anmPill(a)}</div>
+      <div class="ostats">
+        <span>${esc(fmt(a.created_at.slice(0, 10)).slice(3))}</span>
+        <span>Wunsch: <b>${esc(a.wunsch_monat ? monthLabel(a.wunsch_monat) : "egal")}</b></span>
+        <span><b>${a.anzahl_teile || "?"}</b> Teile</span>
+        <span>Oben <b>${esc(a.groesse_oben || "–")}</b> · Unten <b>${esc(a.groesse_unten || "–")}</b>${a.schuhgroesse ? ` · Schuhe <b>${esc(a.schuhgroesse)}</b>` : ""}</span>
+      </div>
+      <div class="line2">${(a.stile || []).map(s => `<span class="pill">${esc(s)}</span>`).join("")}${a.vermieten ? `<span class="flag">Vermieten · ${(a.vermieten_fotos || []).length} Fotos</span>` : ""}</div>
+    </button>`).join("") : `<p class="empty">${f === "offen" ? "Keine neuen Anmeldungen." : "Keine Anmeldungen in dieser Ansicht."}</p>`;
+}
+function showAnm(id) {
+  const a = ANM.find(x => x.id === id); if (!a) return closePanel();
+  const fotos = (a.vermieten_fotos || []).map(p => URLS["anm:" + p]).filter(Boolean);
+  openPanel(`
+    <div class="phead"><span class="sub">Anmeldung</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
+    <h2 class="dt">${esc(anmName(a))}</h2>
+    <div class="statusrow">${anmPill(a)}<span class="hint">eingegangen ${esc(fmt(a.created_at.slice(0, 10)))}</span></div>
+    <dl class="f">
+      <dt>E-Mail</dt><dd>${esc(a.email)}</dd>
+      <dt>Telefon</dt><dd>${esc(a.telefon || "–")}</dd>
+      <dt>Instagram</dt><dd>${esc(a.instagram || "–")}</dd>
+      <dt>Wunschmonat</dt><dd>${esc(a.wunsch_monat ? monthLabel(a.wunsch_monat) : "egal")}</dd>
+      <dt>Anzahl Teile</dt><dd>${esc(a.anzahl_teile || "–")}</dd>
+      <dt>Was dabei ist</dt><dd>${esc((a.kategorien || []).join(", ") || "–")}</dd>
+      <dt>Grösse oben</dt><dd>${esc(a.groesse_oben || "–")}</dd>
+      <dt>Grösse unten</dt><dd>${esc(a.groesse_unten || "–")}</dd>
+      <dt>Schuhe</dt><dd>${esc(a.schuhgroesse || "keine")}</dd>
+      <dt>Stil (ihre Wahl)</dt><dd>${(a.stile || []).map(s => `<span class="pill">${esc(s)}</span>`).join(" ") || "–"}</dd>
+      <dt>Stil (deine Einschätzung)</dt><dd><select id="a-stil"><option value="">wie ihre Wahl</option>${STYLES.map(s => `<option ${s === a.stil_frankly ? "selected" : ""}>${s}</option>`).join("")}</select></dd>
+      ${a.nachricht ? `<dt>Nachricht</dt><dd>${esc(a.nachricht)}</dd>` : ""}
+    </dl>
+    ${a.vermieten ? `<div class="box ${a.vermieten_ok == null ? "alert" : ""}">
+      <div class="sec" style="margin:0 0 6px">Vermieten · Abendkleider & Statement Pieces ${a.vermieten_ok == null ? "· Antwort innert 24 h" : (a.vermieten_ok ? "· zugesagt" : "· abgesagt")}</div>
+      ${a.vermieten_text ? `<p class="pline">${esc(a.vermieten_text)}</p>` : ""}
+      <div class="afotos">${fotos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Vermiet-Teil"></a>`).join("") || `<p class="hint">Keine Fotos.</p>`}</div>
+      <div class="rowsmall"><button class="btn" type="button" data-aact="rent-yes">Vermieten zusagen …</button><button class="btn" type="button" data-aact="rent-no">Vermieten absagen …</button></div>
+    </div>` : ""}
+    <div class="sec">Entscheid</div>
+    <div class="rowsmall">
+      <button class="btn primary" type="button" data-aact="accept">Annehmen …</button>
+      <button class="btn" type="button" data-aact="wait">Warteliste …</button>
+      <button class="btn danger" type="button" data-aact="reject">Absage …</button>
+      ${a.status === "Angenommen" && !a.owner_id ? `<button class="btn" type="button" data-aact="mkowner">Als Owner anlegen</button>` : ""}
+      ${a.owner_id ? `<button class="linkbtn" type="button" data-owner="${esc(a.owner_id)}">Owner ${esc(a.owner_id)} ansehen</button>` : ""}
+    </div>
+    <div id="act"></div>
+    ${a.status_grund ? `<div class="box"><div class="sec" style="margin:0 0 6px">Letzte Nachricht</div><p class="pline">${esc(a.status_grund)}</p></div>` : ""}
+    <div class="row"><button class="btn danger" type="button" data-aact="delete">Anmeldung löschen</button></div>
+  `, { type: "anm", id });
+  $("a-stil").addEventListener("change", async () => {
+    const r = await sb.from("anmeldungen").update({ stil_frankly: $("a-stil").value || null }).eq("id", id).select().single();
+    if (r.error) return toast(nice(r.error), 4500);
+    ANM = ANM.map(x => x.id === id ? r.data : x); renderAnm(); toast("Stil gespeichert");
+  });
+}
+function mailTo(to, subject, body) {
+  const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = href;
+}
+const GRUSS = "\n\nLiebe Grüsse\nYesim · 0–100 Frankly";
+function anmMail(kind, a, monat, text) {
+  const hi = `Hallo ${a.vorname}\n\n`;
+  if (kind === "accept") {
+    const m = parseD(monat), fs = firstSat(m.getFullYear(), m.getMonth()), ls = lastSat(m.getFullYear(), m.getMonth());
+    return ["Du bist dabei bei 0–100 Frankly", hi + `schön, dass du mitmachst! Du bist für ${monthLabel(monat)} dabei. Die Runde läuft vom ${fmt(fs)} bis ${fmt(ls)}.\n\nBitte bring deine Teile (maximal 10) vor Rundenbeginn vorbei:\n${SHOP_ADR}\n\n` + (text ? text + "\n\n" : "") + `Von jedem Verkauf bekommst du 90 %, ausbezahlt am Ende der Runde.` + GRUSS];
+  }
+  if (kind === "wait") return ["Deine Anmeldung bei 0–100 Frankly", hi + `danke für deine Anmeldung bei 0–100 Frankly! ${monat ? `Für ${monthLabel(monat)} sind wir leider schon voll. ` : ""}Wir haben dich auf die Warteliste gesetzt und melden uns, sobald ein Platz frei wird.\n\n` + (text || "") + GRUSS];
+  if (kind === "reject") return ["Deine Anmeldung bei 0–100 Frankly", hi + `vielen Dank für dein Interesse an 0–100 Frankly und für deine Anmeldung. Leider können wir dich diesmal nicht aufnehmen.\n\n` + (text || "") + GRUSS];
+  if (kind === "rent-yes") return ["Vermieten bei 0–100 Frankly: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 90 %.\n\n` + (text || "") + GRUSS];
+  if (kind === "rent-no") return ["Vermieten bei 0–100 Frankly", hi + `danke für deine Fotos! Leider passen deine Teile diesmal nicht in unser Vermiet-Angebot.\n\n` + (text || "") + GRUSS];
+}
+async function patchAnm(id, patch, msg) {
+  const r = await sb.from("anmeldungen").update(Object.assign({ bearbeitet_am: new Date().toISOString() }, patch)).eq("id", id).select().single();
+  if (r.error) { toast(nice(r.error), 4500); return null; }
+  ANM = ANM.map(x => x.id === id ? r.data : x); renderAnm(); if (msg) toast(msg); return r.data;
+}
+async function anmAction(kind, btn) {
+  const id = panelState && panelState.id, a = ANM.find(x => x.id === id); if (!a) return;
+  if (kind === "cancel") { const el = $("act"); if (el) el.innerHTML = ""; return; }
+  if (kind === "delete") {
+    if (!confirmTap(btn, "anmdel" + id, "Wirklich löschen? Nochmals tippen")) return;
+    const r = await sb.from("anmeldungen").delete().eq("id", id);
+    if (r.error) return toast(nice(r.error), 4500);
+    if ((a.vermieten_fotos || []).length) await sb.storage.from("anmeldungen").remove(a.vermieten_fotos).catch(() => {});
+    ANM = ANM.filter(x => x.id !== id); closePanel(); renderAnm(); return toast("Anmeldung gelöscht");
+  }
+  if (kind === "mkowner") {
+    busy(btn, true, "Wird angelegt …");
+    const row = { profilname: a.vorname, voller_name: anmName(a), email: a.email, telefon: a.telefon, instagram: a.instagram,
+      stil: anmStile(a).join(", ") || null, provision_prozent: 10, vereinbarung_datum: iso(today()), notiz: "Aus Anmeldung vom " + fmt(a.created_at.slice(0, 10)) };
+    const { data, error } = await sb.from("owners").insert(row).select().single();
+    if (error) { busy(btn, false); return toast(nice(error), 4500); }
+    OWNERS = OWNERS.concat(data).sort((x, y) => x.id.localeCompare(y.id));
+    await patchAnm(id, { owner_id: data.id }, `${data.id} angelegt`); renderAll(); return showAnm(id);
+  }
+  const needsText = kind === "reject";
+  const withMonth = kind === "accept" || kind === "wait";
+  const label = { accept: "Annehmen", wait: "Auf Warteliste setzen", reject: "Absage", "rent-yes": "Vermieten zusagen", "rent-no": "Vermieten absagen" }[kind];
+  const ph = { accept: "Optional: persönliche Ergänzung, z.B. Abgabetermin", wait: "Was du ihr noch sagen möchtest (optional)", reject: "Warum? Kurz und freundlich, z.B. Stil oder Grössen passen diesen Monat nicht.", "rent-yes": "Optional: wie es weitergeht, z.B. wann sie die Teile bringen kann", "rent-no": "Optional: Grund" }[kind];
+  const el = $("act");
+  el.innerHTML = `<form class="box actform" id="actForm" novalidate>
+    <div class="sec" style="margin:0">${label}</div>
+    ${withMonth ? `<label>Monat<select id="m-monat">${monthsAhead(5).map(m => `<option value="${m}" ${m === (a.status_monat || a.wunsch_monat || "").slice(0, 10) ? "selected" : ""}>${monthLabel(m)}</option>`).join("")}</select></label>` : ""}
+    <label>${needsText ? "Grund *" : "Dein Text"}<textarea id="m-text" rows="4" placeholder="${esc(ph)}"></textarea></label>
+    <p class="hint">Danach öffnet sich dein Mailprogramm mit einer fertigen E-Mail an ${esc(a.email)}. Du kannst sie vor dem Senden noch anpassen.</p>
+    <div class="rowsmall"><button class="btn primary" type="submit">Speichern & E-Mail öffnen</button><button class="btn" type="button" data-aact="save-only">Nur speichern</button><button class="btn ghost" type="button" data-aact="cancel">Abbrechen</button></div>
+  </form>`;
+  el.scrollIntoView({ block: "nearest" });
+  const run = async (sendMail, b) => {
+    const text = $("m-text").value.trim(), monat = withMonth ? $("m-monat").value : null;
+    if (needsText && !text) return toast("Bitte einen Grund eingeben.");
+    busy(b, true);
+    const patch = kind.startsWith("rent") ? { vermieten_ok: kind === "rent-yes", status_grund: text || null }
+      : { status: kind === "accept" ? "Angenommen" : kind === "wait" ? "Warteliste" : "Absage", status_monat: monat, status_grund: text || null };
+    const ok = await patchAnm(id, patch, label + " gespeichert");
+    busy(b, false);
+    if (!ok) return;
+    showAnm(id);
+    if (sendMail) { const [subj, body] = anmMail(kind, a, monat, text); mailTo(a.email, subj, body); }
+  };
+  $("actForm").onsubmit = e => { e.preventDefault(); run(true, e.submitter); };
+  el.querySelector('[data-aact="save-only"]').onclick = e => { e.stopPropagation(); run(false, e.currentTarget); };
+}
+
 /* ---------- Look anzeigen ---------- */
 function showLook(id) {
   const l = LOOKS.find(x => x.id === id); if (!l) return;
@@ -967,6 +1130,8 @@ document.addEventListener("click", e => {
   if (d.del) return deleteItem(d.del, b);
   if (d.dellook) return deleteLook(d.dellook, b);
   if (d.period) { fPeriod = d.period; const fb = $("fblock"); if (fb) fb.innerHTML = franklyBlock(); return; }
+  if (d.anm) return showAnm(d.anm);
+  if (d.aact) return anmAction(d.aact, b);
   if (d.payout) return payout(d.payout, b);
   if (d.oedit) return ownerForm(ownerOf(d.oedit));
   if (d.odel) return deleteOwner(d.odel, b);
@@ -977,6 +1142,7 @@ document.addEventListener("click", e => {
     case "tab-items": return setTab("items");
     case "tab-looks": return setTab("looks");
     case "tab-owners": return setTab("owners");
+    case "tab-anm": return setTab("anm");
     case "addBtn": return showAdd();
     case "addLookBtn": return showAddLook();
     case "addOwnerBtn": return ownerForm();
@@ -986,10 +1152,11 @@ document.addEventListener("click", e => {
 });
 $("q").addEventListener("input", renderGrid);
 $("fstat").addEventListener("change", renderGrid);
+$("fanm").addEventListener("change", renderAnm);
 
 /* Beim Zurückkehren zur App neue Daten holen, damit PC und Handy gleich sind */
 async function reload(manual) {
-  try { URLS = {}; await load(); renderAll(); if (manual) toast("Aktualisiert"); if (!ov.hidden && panelState && (panelState.type === "item" || panelState.type === "owner")) refreshPanel(); }
+  try { URLS = {}; await load(); renderAll(); if (manual) toast("Aktualisiert"); if (!ov.hidden && panelState && ["item", "owner", "anm"].includes(panelState.type)) refreshPanel(); }
   catch (err) { toast(nice(err), 4000); }
 }
 document.addEventListener("visibilitychange", () => {

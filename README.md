@@ -7,7 +7,8 @@ Läuft im Browser auf Handy und PC, kann auf dem Homescreen abgelegt werden.
 
 | Teil | Wo | Wozu |
 |---|---|---|
-| Web-App | dieses Repository, veröffentlicht über GitHub Pages | Oberfläche: erfassen, suchen, Looks bilden |
+| Shop (öffentlich) | `index.html`, `shop.js`, `shop.css` | Stöbern, Looks, Owner-Profile, QR-Link `?teil=FR-000123`, Owner-werden-Formular |
+| Lager (Team) | `lager.html`, `app.js`, `style.css` | Login; erfassen, Owner, Abrechnung, Anmeldungen |
 | Datenbank | Supabase (PostgreSQL), Projekt `frankly-lager` | Teile, Looks, Verknüpfungen |
 | Fotos | Supabase Storage, privater Bucket `fotos` | Originalfotos; Zugriff nur angemeldet |
 | Login | Supabase Auth (E-Mail + Passwort) | Nur eingeladene Personen; Registrierung ist ausgeschaltet |
@@ -39,6 +40,13 @@ Fotopfade im Bucket `fotos`:
 - `originale/FR-00000X_front.jpg`, `looks/LOOK-000X.jpg`: Starterpaket
 - `items/<uuid>.jpg`, `looks-neu/<uuid>.jpg`: in der App hochgeladen (max. 1600 px, JPEG)
 
+## Öffentlicher Zugriff (`04_shop_anmeldungen.sql`)
+
+- anon liest Teile nur mit Status Verfügbar/Reserviert/Vermietet und nur freigegebene Spalten (Column Grants + RLS).
+- anon liest Owner nur mit `oeffentlich = true` (Profilname, Stil, Instagram).
+- anon darf in `anmeldungen` nur einfügen; Vermiet-Fotos landen im privaten Bucket `anmeldungen`.
+- Ladeninfos (Adresse, Öffnungszeiten) und Stil-Kacheln stehen oben in `shop.js`; Kachel-Fotos im Ordner `stile/`.
+
 ## Sicherheit
 
 - `config.js` enthält nur die Projekt-URL und den **publishable** Key. Beides ist für den Browser gedacht.
@@ -49,6 +57,5 @@ Fotopfade im Bucket `fotos`:
 
 1. Hintergrund entfernen (zweites Foto `foto_frei_pfad`, Original bleibt)
 2. QR-Code / Hangtag-Druck pro Teil, Adresse z. B. `/i/FR-000157`
-3. Öffentliche Seite (Shop zum Durchstöbern, QR-Code → Teil)
 4. Owner-Bereich mit eigenem Login (nur eigene Teile, Preis senken, Termine)
 5. RFID-Tags zuordnen

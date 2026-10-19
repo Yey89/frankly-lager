@@ -1,0 +1,64 @@
+/* ---------- 0–100 Frankly · öffentlicher Shop ----------
+   Baut auf style.css auf (Farben, Schriften, Karten, Panel). */
+
+body.shop{padding-block:0 32px}
+.stop{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:var(--bg);border-bottom:3px solid var(--ink)}
+.stop-in{display:flex;align-items:center;justify-content:space-between;gap:10px 20px;flex-wrap:wrap;padding-block:12px}
+.stop .mark{text-decoration:none;color:var(--ink)}
+.snav{display:flex;gap:4px 18px;flex-wrap:wrap}
+.snav a{font-family:var(--display);font-weight:700;font-stretch:110%;text-transform:uppercase;font-size:15px;color:var(--muted);text-decoration:none;padding-block:4px;border-bottom:3px solid transparent}
+.snav a:hover{color:var(--ink)}
+.snav a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--red)}
+
+.view{padding-top:22px}
+.intro{display:grid;gap:10px;padding-block:18px 8px;max-width:760px}
+.claim{font-family:var(--display);font-weight:800;font-stretch:118%;text-transform:uppercase;font-size:clamp(38px,8vw,84px);line-height:.92;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.lead{font-size:17px;line-height:1.5;max-width:60ch;margin:0;color:var(--ink)}
+.where{margin:4px 0 0;font-family:var(--mono);font-size:13px;color:var(--muted)}
+.where b{color:var(--ink);font-weight:600}
+.vtitle{font-family:var(--display);font-weight:800;font-stretch:115%;text-transform:uppercase;font-size:clamp(30px,5vw,48px);line-height:1;margin:6px 0 12px}
+.sprice{font-family:var(--mono);font-weight:600;font-size:22px;font-variant-numeric:tabular-nums}
+.box.owner .oname{font-family:var(--display);font-weight:700;font-size:20px;display:block;margin-top:4px}
+.box .klabel{display:block;margin-bottom:6px}
+
+/* Owner werden */
+.steps{list-style:none;counter-reset:s;margin:22px 0;padding:0;display:grid;gap:12px;max-width:760px}
+.steps li{counter-increment:s;position:relative;padding-left:52px;min-height:36px;line-height:1.5}
+.steps li::before{content:counter(s);position:absolute;left:0;top:0;font-family:var(--mono);font-weight:600;font-size:20px;color:var(--red);border:2px solid var(--red);width:36px;height:36px;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.rentnote{border:2px solid var(--ink);background:var(--surface);padding:14px 16px;max-width:760px;margin-bottom:26px}
+.rentnote p{margin:6px 0 0;line-height:1.5}
+.joinform{max-width:760px;gap:18px}
+.joinform fieldset{border:0;border-top:1px solid var(--line);margin:0;padding:16px 0 0;display:grid;gap:12px;min-width:0}
+.joinform legend{font-family:var(--display);font-weight:800;font-stretch:112%;text-transform:uppercase;font-size:18px;padding:0 8px 0 0}
+.field{display:grid;gap:6px}
+.flabel{font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.flabel .hint{text-transform:none;letter-spacing:0;font-family:var(--body)}
+label.short{max-width:260px}
+.joinform .chip{padding:8px 12px;font-size:14px}
+.stiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.stiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stile{background:none;border:2px solid var(--line);padding:0;cursor:pointer;text-align:left;display:flex;flex-direction:column;min-width:0;color:var(--ink)}
+.stile .sph{position:relative;aspect-ratio:3/4;background:var(--ink);overflow:hidden;display:block}
+.stile .sph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.85}
+.stile .sname{position:absolute;left:0;bottom:0;right:0;padding:8px 10px;font-family:var(--display);font-weight:800;font-stretch:125%;letter-spacing:.1em;font-size:16px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.stile .sph:not(:has(img)) .sname{top:0;display:flex;align-items:center;justify-content:center;background:var(--red);font-size:22px}
+.stile .swords{font-size:12.5px;color:var(--muted);padding:8px 10px;line-height:1.35}
+.stile[aria-pressed="true"]{border-color:var(--red)}
+.stile[aria-pressed="true"] .sname::after{content:" ✓"}
+.rthumb{position:relative;display:inline-block}
+.rthumb img{width:72px;height:96px;object-fit:cover;display:block;border:1px solid var(--line)}
+.rthumb button{position:absolute;top:2px;right:2px;border:0;background:var(--ink);color:var(--bg);width:22px;height:22px;cursor:pointer;font-size:12px}
+.hp{position:absolute!important;left:-9999px;width:1px;height:1px;overflow:hidden}
+.big-btn{justify-self:start;padding:14px 22px;font-size:16px}
+.done{border:2px solid var(--ink);padding:20px;max-width:760px;background:var(--surface)}
+
+/* Besuch */
+.visit{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:760px}
+.vblock{border:1px solid var(--line);background:var(--surface);padding:16px;display:grid;gap:10px;align-content:start}
+.addr{margin:0;font-size:18px;line-height:1.45}
+.hours{border-collapse:collapse;font-variant-numeric:tabular-nums}
+.hours th{text-align:left;font-weight:600;padding:4px 18px 4px 0}
+.hours td{padding:4px 0}
+
+.sfoot{margin-top:48px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.sfoot .team{color:var(--muted)}

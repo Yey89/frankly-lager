@@ -191,3 +191,15 @@ label.check input{width:auto;margin-top:3px}
 .klabel{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .kval{font-family:var(--mono);font-weight:600;font-size:22px;font-variant-numeric:tabular-nums}
 .periodsw{display:flex;gap:6px;margin-bottom:10px}
+/* Anmeldungen */
+.mplan{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-bottom:8px}
+.mcard{border:1px solid var(--line);background:var(--surface);padding:12px 14px;display:grid;gap:6px;min-width:0}
+.mtop{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mcard .oname{font-size:18px}
+.alist{display:grid;gap:10px}
+.acard{background:var(--surface);border:1px solid var(--line);padding:12px 14px;text-align:left;cursor:pointer;display:grid;gap:8px;min-width:0;color:var(--ink)}
+.acard:hover{border-color:var(--ink)}
+.afotos{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+.afotos img{width:110px;height:146px;object-fit:cover;display:block;border:1px solid var(--line)}
+.actform textarea{font-family:var(--body);font-size:15px;color:var(--ink);border:1px solid var(--line);background:var(--bg);padding:8px 10px;width:100%;text-transform:none;letter-spacing:0}
+.tabs{overflow-x:auto;scrollbar-width:none}.tabs .tab{white-space:nowrap}
