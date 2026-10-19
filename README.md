@@ -22,7 +22,18 @@ Bibliothek: `@supabase/supabase-js` 2.110.1 über jsDelivr.
 - **looks**: Kombination mehrerer Teile. Der Style (EDGY/FIERCE/DREAMY/AGILE) gehört zum Look.
 - **look_items**: Verknüpfung Look ↔ Teil (ein Teil kann in vielen Looks sein).
 - **tags**: vorbereitet für RFID (EPC ↔ item_id). Noch nicht in der App.
-- Besitzerin (`owner_id`) und Standort (`standort`) sind vorerst Textfelder, später eigene Tabellen.
+- **owners** (`03_owner_phasen.sql`): Besitzerinnen, `OWN-001` = Frankly/eigene Teile (0 %). Profilfelder
+  (profilname, stil, instagram, oeffentlich) vs. interne Felder (voller_name, email, telefon, provision_prozent).
+- **vermietungen**: Mieten pro Teil, mit Provision zum Zeitpunkt der Miete und `ausbezahlt_am`.
+- **preis_verlauf**: wird per Trigger bei jeder Preisänderung geschrieben.
+
+## Geschäftslogik (Kommission)
+
+- Phase = erster bis letzter Samstag eines Monats (`items.phase_monat` = 1. Tag des Monats).
+- Verkauf/Miete: Owner erhält Betrag minus Provision (Standard 10 %), Auszahlung am letzten Samstag
+  des Monats, in dem verkauft/vermietet wurde. Provision wird beim Verkauf in `verkauf_provision` eingefroren.
+- Nach Phasenende entscheidet die Owner: Preis senken (nur tiefer, nächste Phase), Upcycling (Termin)
+  oder Zurücknehmen (Abholung samstags). Status danach `Zurückgegeben`.
 
 Fotopfade im Bucket `fotos`:
 - `originale/FR-00000X_front.jpg`, `looks/LOOK-000X.jpg`: Starterpaket
@@ -38,5 +49,6 @@ Fotopfade im Bucket `fotos`:
 
 1. Hintergrund entfernen (zweites Foto `foto_frei_pfad`, Original bleibt)
 2. QR-Code / Hangtag-Druck pro Teil, Adresse z. B. `/i/FR-000157`
-3. Besitzerinnen und Standorte als eigene Tabellen
-4. RFID-Tags zuordnen, Verkauf und Vermietung
+3. Öffentliche Seite (Shop zum Durchstöbern, QR-Code → Teil)
+4. Owner-Bereich mit eigenem Login (nur eigene Teile, Preis senken, Termine)
+5. RFID-Tags zuordnen

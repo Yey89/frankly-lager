@@ -52,11 +52,22 @@
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" id="tab-items" aria-selected="true" type="button">Teile <span class="n" id="cntItems"></span></button>
     <button class="tab" role="tab" id="tab-looks" aria-selected="false" type="button">Looks <span class="n" id="cntLooks"></span></button>
+    <button class="tab" role="tab" id="tab-owners" aria-selected="false" type="button">Owner <span class="n" id="cntOwners"></span></button>
   </nav>
 
   <section id="viewItems">
     <div class="tools">
-      <input class="search" id="q" type="search" placeholder="Suchen: Nummer, Titel, Marke, Farbe …" aria-label="Teile durchsuchen">
+      <input class="search" id="q" type="search" placeholder="Suchen: Nummer, Titel, Marke, Owner …" aria-label="Teile durchsuchen">
+      <select class="search fstat" id="fstat" aria-label="Nach Status filtern">
+        <option value="alle">Alle Status</option>
+        <option value="laden">Im Laden</option>
+        <option value="Verfügbar">Verfügbar</option>
+        <option value="Reserviert">Reserviert</option>
+        <option value="Vermietet">Vermietet</option>
+        <option value="Verkauft">Verkauft</option>
+        <option value="Zurückgegeben">Zurückgegeben</option>
+        <option value="faellig">Entscheid fällig</option>
+      </select>
       <div class="chips" id="cats"></div>
     </div>
     <div class="grid" id="grid"></div>
@@ -68,6 +79,14 @@
       <button class="btn" id="addLookBtn" type="button">+ Look erstellen</button>
     </div>
     <div class="looks" id="lookGrid"></div>
+  </section>
+
+  <section id="viewOwners" hidden>
+    <div class="tools" style="justify-content:space-between">
+      <span class="hint" style="flex:1 1 280px;max-width:62ch">Owner sind die Personen, denen die Teile gehören. Frankly erhält die Provision, der Rest wird am letzten Samstag des Monats ausbezahlt.</span>
+      <button class="btn" id="addOwnerBtn" type="button">+ Owner</button>
+    </div>
+    <div class="ogrid" id="ownerGrid"></div>
   </section>
 
   <footer>

@@ -1,32 +1,42 @@
 /* =========================================================
-   0–100 FRANKLY · LAGER
-   Web-App für Teile, Fotos und Looks. Daten liegen in Supabase:
-   Tabellen items, looks, look_items · Fotos im privaten Speicher "fotos".
+   0–100 FRANKLY · LAGER  (Version 2: Owner, Phasen, Verkauf, Miete)
+   Daten in Supabase: items, looks, look_items, owners, vermietungen,
+   preis_verlauf · Fotos im privaten Speicher "fotos".
    ========================================================= */
 "use strict";
 
 const CFG = window.FRANKLY_CONFIG;
 const BUCKET = CFG.bucket || "fotos";
-const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet"];
+const SELF = "OWN-001"; // Frankly / eigene Teile: keine Provision, keine Abrechnung
+const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet", "Zurückgegeben"];
+const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
 const STYLES = ["EDGY", "FIERCE", "DREAMY", "AGILE"];
 const BASE_CATS = ["Oberteile", "Hosen", "Röcke", "Kleider", "Jacken", "Schuhe", "Taschen", "Accessoires"];
 const FIELDS = [
   ["kategorie", "Kategorie"], ["unterkategorie", "Unterkategorie"], ["schnitt", "Schnitt"], ["farben", "Farben"],
   ["muster", "Muster"], ["groesse", "Grösse"], ["marke", "Marke"], ["material", "Material"], ["zustand", "Zustand"],
-  ["preis", "Preis CHF"], ["status", "Status"], ["owner_id", "Besitzerin"], ["standort", "Standort"]
+  ["preis", "Preis CHF"], ["standort", "Standort"]
 ];
+const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 const $ = id => document.getElementById(id);
 let sb = null;
-let ITEMS = [], LOOKS = [], URLS = {};
-let cat = "Alle", lastAdded = null, started = false, lastLoad = 0;
+let ITEMS = [], LOOKS = [], OWNERS = [], RENTALS = [], URLS = {};
+let cat = "Alle", lastAdded = null, started = false, lastLoad = 0, lastOwner = SELF;
 
 /* ---------- Hilfsfunktionen ---------- */
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function isOpen(v) { return v == null || v === "" || /prüfen|unbekannt|nicht geprüft/i.test(String(v)); }
-function priceTxt(p) { return (p === null || p === undefined || p === "") ? "Preis offen" : "CHF " + Number(p).toFixed(Number(p) % 1 ? 2 : 0); }
-function pill(st) { const c = st === "Verkauft" || st === "Vermietet" ? "sold" : (st === "Verfügbar" ? "ok" : ""); return `<span class="pill ${c}">${esc(st || "Entwurf")}</span>`; }
-function parsePrice(v) { v = String(v || "").trim(); if (!v) return null; const n = Number(v.replace(",", ".").replace(/[^\d.]/g, "")); return isNaN(n) ? null : n; }
+function chf(v) { if (v === null || v === undefined || v === "") return "–"; const n = Number(v); return "CHF " + n.toFixed(n % 1 ? 2 : 0); }
+function priceTxt(p) { return (p === null || p === undefined || p === "") ? "Preis offen" : chf(p); }
+function round2(n) { return Math.round(n * 100) / 100; }
+function share(betrag, prov) { return round2(Number(betrag) * (100 - Number(prov || 0)) / 100); }
+function pill(st) {
+  const c = st === "Verkauft" || st === "Vermietet" ? "sold" : (st === "Verfügbar" ? "ok" : (st === "Zurückgegeben" ? "muted" : ""));
+  return `<span class="pill ${c}">${esc(st || "Entwurf")}</span>`;
+}
+function parsePrice(v) { v = String(v == null ? "" : v).trim(); if (!v) return null; const n = Number(v.replace(",", ".").replace(/[^\d.]/g, "")); return isNaN(n) ? null : n; }
 function uuid() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
   const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
@@ -43,11 +53,77 @@ function nice(err) {
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Keine Verbindung. Prüfe das Internet und versuch es nochmals.";
   if (/JWT expired|session/i.test(m)) return "Deine Anmeldung ist abgelaufen. Bitte neu anmelden.";
   if (/row-level security|permission denied/i.test(m)) return "Keine Berechtigung. Bist du angemeldet?";
+  if (/items_owner_fk|foreign key/i.test(m)) return "Diese Person hat noch Teile. Ordne die Teile zuerst jemand anderem zu.";
+  if (/column .* does not exist|relation .* does not exist|schema cache/i.test(m)) return "Die Datenbank ist noch nicht aktualisiert. Bitte zuerst 03_owner_phasen.sql in Supabase ausführen.";
   return m;
 }
 let tt;
 function toast(m, ms) { const t = $("toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, ms || 2800); }
 function busy(btn, on, label) { if (!btn) return; if (on) { btn.dataset.label = btn.textContent; btn.textContent = label || "Speichern …"; btn.disabled = true; } else { btn.textContent = btn.dataset.label || btn.textContent; btn.disabled = false; } }
+function val(id) { const el = $(id); if (!el) return null; const v = el.value.trim(); return v === "" ? null : v; }
+
+/* ---------- Datum & Phasen ----------
+   Eine Phase läuft vom ersten bis zum letzten Samstag eines Monats.
+   phase_monat wird als 1. Tag des Monats gespeichert (z.B. 2026-11-01).
+   Auszahlung: am letzten Samstag des Monats, in dem verkauft/vermietet wurde. */
+const pad = n => String(n).padStart(2, "0");
+function iso(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function parseD(s) { if (!s) return null; const [y, m, d] = String(s).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, d); }
+function today() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function firstSat(y, m) { const d = new Date(y, m, 1); d.setDate(1 + ((6 - d.getDay() + 7) % 7)); return d; }
+function lastSat(y, m) { const d = new Date(y, m + 1, 0); d.setDate(d.getDate() - ((d.getDay() + 1) % 7)); return d; }
+function fmt(d) { if (typeof d === "string") d = parseD(d); return d ? `${WD[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}` : ""; }
+function monthLabel(s) { const d = parseD(s); return d ? `${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "Keine Phase"; }
+function monthStart(d) { return iso(new Date(d.getFullYear(), d.getMonth(), 1)); }
+function defaultPhase() { const t = today(); return t <= lastSat(t.getFullYear(), t.getMonth()) ? monthStart(t) : monthStart(new Date(t.getFullYear(), t.getMonth() + 1, 1)); }
+function nextPhase(s) { const base = parseD(s); const t = today(); let d = base && base > t ? base : t; d = new Date(d.getFullYear(), d.getMonth() + 1, 1); return iso(d); }
+function payoutDate(s) { const d = parseD(s) || today(); const ls = lastSat(d.getFullYear(), d.getMonth()); return d <= ls ? ls : lastSat(d.getFullYear(), d.getMonth() + 1); }
+function nextSaturdays(n) { const out = []; const d = today(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); for (let i = 0; i < n; i++) { out.push(new Date(d)); d.setDate(d.getDate() + 7); } return out; }
+function phaseInfo(it) {
+  if (!it.phase_monat) return null;
+  const m = parseD(it.phase_monat), start = firstSat(m.getFullYear(), m.getMonth()), end = lastSat(m.getFullYear(), m.getMonth()), t = today();
+  if (it.status === "Verkauft" || it.status === "Zurückgegeben") return { start, end, state: "done" };
+  if (it.entscheid) return { start, end, state: "decided" };
+  if (t < start) return { start, end, state: "upcoming" };
+  if (t <= end) return { start, end, state: "running", days: Math.round((end - t) / 864e5) };
+  return { start, end, state: "due" };
+}
+function phaseOptions(current) {
+  const t = today(), opts = [""];
+  for (let i = -1; i <= 3; i++) opts.push(iso(new Date(t.getFullYear(), t.getMonth() + i, 1)));
+  if (current && !opts.includes(current.slice(0, 10))) opts.push(current.slice(0, 10));
+  return opts.map(o => `<option value="${o}" ${o === (current || "").slice(0, 10) ? "selected" : ""}>${o ? monthLabel(o) + " · " + fmt(firstSat(parseD(o).getFullYear(), parseD(o).getMonth())).slice(3) + " – " + fmt(lastSat(parseD(o).getFullYear(), parseD(o).getMonth())).slice(3) : "Keine Phase"}</option>`).join("");
+}
+
+/* ---------- Owner ---------- */
+function ownerOf(id) { return OWNERS.find(o => o.id === id); }
+function ownerName(id) { const o = ownerOf(id); return o ? o.profilname : (id || "–"); }
+function ownerProv(id) { const o = ownerOf(id); return o ? Number(o.provision_prozent) : 10; }
+function ownerOptions(sel) { return OWNERS.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? "selected" : ""}>${esc(o.profilname)} · ${esc(o.id)}</option>`).join(""); }
+function itemOwner(itemId) { const it = ITEMS.find(x => x.id === itemId); return it ? it.owner_id : null; }
+/* Offene Beträge, die einer Owner noch ausbezahlt werden müssen */
+function openPosts(oid) {
+  const posts = [];
+  ITEMS.filter(i => i.owner_id === oid && i.status === "Verkauft" && i.verkauf_preis != null && !i.ausbezahlt_am).forEach(i => {
+    const prov = i.verkauf_provision != null ? Number(i.verkauf_provision) : ownerProv(oid);
+    posts.push({ kind: "item", id: i.id, nr: i.nr, titel: i.titel, art: "Verkauf", betrag: Number(i.verkauf_preis), prov, anteil: share(i.verkauf_preis, prov), datum: i.verkauf_datum, faellig: payoutDate(i.verkauf_datum) });
+  });
+  RENTALS.filter(r => !r.ausbezahlt_am && itemOwner(r.item_id) === oid).forEach(r => {
+    const it = ITEMS.find(x => x.id === r.item_id) || {};
+    posts.push({ kind: "rental", id: r.id, nr: it.nr, titel: it.titel, art: "Miete", betrag: Number(r.betrag), prov: Number(r.provision_prozent), anteil: share(r.betrag, r.provision_prozent), datum: r.von, faellig: payoutDate(r.von) });
+  });
+  return posts.sort((a, b) => a.faellig - b.faellig);
+}
+function ownerStats(oid) {
+  const its = ITEMS.filter(i => i.owner_id === oid);
+  return {
+    total: its.length,
+    shop: its.filter(i => IN_SHOP.includes(i.status)).length,
+    sold: its.filter(i => i.status === "Verkauft").length,
+    due: its.filter(i => { const p = phaseInfo(i); return p && p.state === "due"; }).length,
+    open: round2(openPosts(oid).reduce((s, p) => s + p.anteil, 0))
+  };
+}
 
 /* ---------- Start & Anmeldung ---------- */
 function show(which) { $("boot").hidden = which !== "boot"; $("login").hidden = which !== "login"; $("app").hidden = which !== "app"; }
@@ -56,7 +132,7 @@ async function init() {
   if (!window.supabase || !CFG) { $("boot").innerHTML = `<p class="err">Die App konnte nicht geladen werden. Seite neu laden.</p>`; return; }
   sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: true, autoRefreshToken: true } });
   sb.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_OUT") { started = false; ITEMS = []; LOOKS = []; URLS = {}; show("login"); }
+    if (event === "SIGNED_OUT") { started = false; ITEMS = []; LOOKS = []; OWNERS = []; RENTALS = []; URLS = {}; show("login"); }
     else if (session && !started) setTimeout(startApp, 0); // nicht direkt im Auth-Callback laden
   });
   const { data } = await sb.auth.getSession();
@@ -84,30 +160,30 @@ async function startApp() {
 
 /* ---------- Daten laden ---------- */
 async function load() {
-  const [a, b] = await Promise.all([
+  const [a, b, c, d] = await Promise.all([
     sb.from("items").select("*").order("nr_num"),
-    sb.from("looks").select("*, look_items(item_id, position)").order("nr_num")
+    sb.from("looks").select("*, look_items(item_id, position)").order("nr_num"),
+    sb.from("owners").select("*").order("id"),
+    sb.from("vermietungen").select("*").order("von")
   ]);
-  if (a.error) throw a.error;
-  if (b.error) throw b.error;
+  for (const r of [a, b, c, d]) if (r.error) throw r.error;
   ITEMS = a.data || [];
-  LOOKS = (b.data || []).map(l => Object.assign({}, l, {
-    items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id)
-  }));
+  LOOKS = (b.data || []).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id) }));
+  OWNERS = c.data || [];
+  RENTALS = d.data || [];
   await signUrls(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)));
   lastLoad = Date.now();
 }
-
 async function signUrls(paths) {
   const todo = [...new Set(paths.filter(p => p && !URLS[p]))];
   for (let i = 0; i < todo.length; i += 100) {
     const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(todo.slice(i, i + 100), 60 * 60 * 12);
     if (error) throw error;
-    (data || []).forEach(d => { if (d.signedUrl && d.path) URLS[d.path] = d.signedUrl; });
+    (data || []).forEach(x => { if (x.signedUrl && x.path) URLS[x.path] = x.signedUrl; });
   }
 }
 
-/* Fotos verkleinern (max. 1600 px), damit Upload schnell und Speicher klein bleibt */
+/* Fotos verkleinern (max. 1600 px) */
 function resizeImage(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -134,28 +210,43 @@ async function removePhoto(path) {
   await sb.storage.from(BUCKET).remove([path]);
 }
 
-/* ---------- Anzeige ---------- */
+/* ---------- Übersicht Teile ---------- */
+function matchesStatus(it, f) {
+  if (!f || f === "alle") return true;
+  if (f === "laden") return IN_SHOP.includes(it.status);
+  if (f === "faellig") { const p = phaseInfo(it); return p && p.state === "due"; }
+  return it.status === f;
+}
 function renderCats() {
   const cs = ["Alle"].concat([...new Set(ITEMS.map(i => i.kategorie).filter(Boolean))]);
   if (!cs.includes(cat)) cat = "Alle";
   $("cats").innerHTML = cs.map(c => `<button class="chip" type="button" aria-pressed="${c === cat}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+  const due = ITEMS.filter(i => { const p = phaseInfo(i); return p && p.state === "due"; }).length;
+  const o = $("fstat").querySelector('option[value="faellig"]'); if (o) o.textContent = `Entscheid fällig (${due})`;
+}
+function itemCard(it) {
+  const p = phaseInfo(it);
+  const flag = p && p.state === "due" ? `<span class="flag">Entscheid fällig</span>` : "";
+  const own = it.owner_id && it.owner_id !== SELF ? `<span>· ${esc(ownerName(it.owner_id))}</span>` : "";
+  return `
+    <button class="card" type="button" data-item="${esc(it.id)}">
+      <div class="ph ${it.status === "Verkauft" || it.status === "Zurückgegeben" ? "dim" : ""}">${imgTag(it.foto_pfad, it.titel)}<span class="tag ${it.id === lastAdded ? "new" : ""}">${esc(it.nr)}</span></div>
+      <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price ${it.preis == null ? "open" : ""}">${esc(priceTxt(it.preis))}</span></div>
+      <div class="line2">${pill(it.status)}${flag}<span>${esc(it.unterkategorie || it.kategorie || "")}</span>${own}</div>
+    </button>`;
 }
 function renderGrid() {
-  const q = $("q").value.trim().toLowerCase();
-  const list = ITEMS.filter(it => (cat === "Alle" || it.kategorie === cat) &&
-    (!q || [it.nr, it.titel, it.marke, it.farben, it.kategorie, it.unterkategorie, it.notiz, it.groesse].join(" ").toLowerCase().includes(q)))
+  const q = $("q").value.trim().toLowerCase(), f = $("fstat").value;
+  const list = ITEMS.filter(it => (cat === "Alle" || it.kategorie === cat) && matchesStatus(it, f) &&
+    (!q || [it.nr, it.titel, it.marke, it.farben, it.kategorie, it.unterkategorie, it.notiz, it.groesse, ownerName(it.owner_id), it.owner_id].join(" ").toLowerCase().includes(q)))
     .sort((a, b) => a.nr_num - b.nr_num);
   $("cntItems").textContent = ITEMS.length;
   $("cntLooks").textContent = LOOKS.length;
+  $("cntOwners").textContent = OWNERS.length;
   const g = $("grid");
   if (!ITEMS.length) { g.innerHTML = `<p class="empty">Noch keine Teile. Tippe oben auf «+ Teil erfassen».</p>`; return; }
-  if (!list.length) { g.innerHTML = `<p class="empty">Keine Teile gefunden. Suche anpassen.</p>`; return; }
-  g.innerHTML = list.map(it => `
-    <button class="card" type="button" data-item="${esc(it.id)}">
-      <div class="ph">${imgTag(it.foto_pfad, it.titel)}<span class="tag ${it.id === lastAdded ? "new" : ""}">${esc(it.nr)}</span></div>
-      <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price ${it.preis == null ? "open" : ""}">${esc(priceTxt(it.preis))}</span></div>
-      <div class="line2">${pill(it.status)}<span>${esc(it.unterkategorie || it.kategorie || "")}</span></div>
-    </button>`).join("");
+  if (!list.length) { g.innerHTML = `<p class="empty">Keine Teile gefunden. Suche oder Filter anpassen.</p>`; return; }
+  g.innerHTML = list.map(itemCard).join("");
 }
 function renderLooks() {
   const lg = $("lookGrid");
@@ -170,41 +261,104 @@ function renderLooks() {
       <div class="thumbs">${l.items.map(id => { const it = ITEMS.find(x => x.id === id); return it ? `<button class="mini" type="button" data-item="${esc(id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>` : ""; }).join("")}</div>
     </div>`).join("");
 }
+function renderOwners() {
+  const og = $("ownerGrid");
+  if (!OWNERS.length) { og.innerHTML = `<p class="empty">Noch keine Owner. Bitte zuerst 03_owner_phasen.sql in Supabase ausführen.</p>`; return; }
+  og.innerHTML = OWNERS.map(o => {
+    const s = ownerStats(o.id);
+    return `
+    <button class="ocard" type="button" data-owner="${esc(o.id)}">
+      <div class="otop"><span class="oid">${esc(o.id)}</span>${o.id === SELF ? `<span class="pill">Eigene Teile</span>` : `<span class="pill">${esc(Number(o.provision_prozent))} % Provision</span>`}</div>
+      <span class="oname">${esc(o.profilname)}</span>
+      <div class="ostats">
+        <span><b>${s.shop}</b> im Laden</span><span><b>${s.sold}</b> verkauft</span>
+        ${o.id !== SELF ? `<span class="${s.open > 0 ? "warn" : ""}"><b>${esc(chf(s.open))}</b> offen</span>` : ""}
+        ${s.due ? `<span class="warn"><b>${s.due}</b> Entscheid fällig</span>` : ""}
+      </div>
+    </button>`;
+  }).join("");
+}
 function renderAll() {
-  renderCats(); renderGrid(); renderLooks();
-  $("foot").textContent = `0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks`;
+  renderCats(); renderGrid(); renderLooks(); renderOwners();
+  $("foot").textContent = `0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`;
 }
 function setTab(t) {
-  $("tab-items").setAttribute("aria-selected", t === "items");
-  $("tab-looks").setAttribute("aria-selected", t === "looks");
+  ["items", "looks", "owners"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
   $("viewItems").hidden = t !== "items";
   $("viewLooks").hidden = t !== "looks";
+  $("viewOwners").hidden = t !== "owners";
 }
 
 /* ---------- Seitenpanel ---------- */
 const ov = $("ov"), panel = $("panel");
-let lastFocus = null;
-function openPanel(html) { lastFocus = document.activeElement; panel.innerHTML = html; ov.hidden = false; document.body.style.overflow = "hidden"; panel.scrollTop = 0; const c = panel.querySelector(".close"); if (c) c.focus(); }
-function closePanel() { ov.hidden = true; panel.innerHTML = ""; document.body.style.overflow = ""; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+let lastFocus = null, panelState = null;
+function openPanel(html, state) {
+  if (ov.hidden) lastFocus = document.activeElement;
+  panelState = state || null;
+  panel.innerHTML = html; ov.hidden = false; document.body.style.overflow = "hidden"; panel.scrollTop = 0;
+  const c = panel.querySelector(".close"); if (c) c.focus({ preventScroll: true });
+}
+function closePanel() { ov.hidden = true; panel.innerHTML = ""; panelState = null; document.body.style.overflow = ""; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+function refreshPanel() { if (!panelState) return; if (panelState.type === "item") showItem(panelState.id); else if (panelState.type === "owner") showOwner(panelState.id); }
 ov.addEventListener("click", e => { if (e.target === ov) closePanel(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !ov.hidden) closePanel(); });
 
-/* ---------- Teil anzeigen / bearbeiten ---------- */
+/* ---------- Teil anzeigen ---------- */
+function statusActions(it) {
+  const s = it.status, p = phaseInfo(it), out = [];
+  if (["Entwurf", "Verfügbar", "Reserviert"].includes(s)) {
+    out.push(`<button class="btn primary" type="button" data-act="sell">Verkauft …</button>`);
+    out.push(s === "Reserviert" ? `<button class="btn" type="button" data-act="setstatus" data-v="Verfügbar">Reservierung aufheben</button>` : `<button class="btn" type="button" data-act="setstatus" data-v="Reserviert">Reservieren</button>`);
+    out.push(`<button class="btn" type="button" data-act="rent">Vermieten …</button>`);
+    if (s === "Entwurf") out.push(`<button class="btn" type="button" data-act="setstatus" data-v="Verfügbar">Verfügbar machen</button>`);
+  }
+  if (s === "Vermietet") out.push(`<button class="btn primary" type="button" data-act="returned">Zurück erhalten</button>`);
+  if (s === "Verkauft" && !it.ausbezahlt_am) out.push(`<button class="btn danger" type="button" data-act="unsell">Verkauf rückgängig</button>`);
+  if (s === "Zurückgegeben") out.push(`<button class="btn" type="button" data-act="setstatus" data-v="Verfügbar">Wieder im Laden</button>`);
+  return out.join("");
+}
+function phaseBlock(it) {
+  const p = phaseInfo(it);
+  if (!p) return "";
+  let line = "", acts = "";
+  const range = `${fmt(p.start)} – ${fmt(p.end)}`;
+  if (p.state === "upcoming") line = `Phase ${monthLabel(it.phase_monat)} startet am ${fmt(p.start)}.`;
+  if (p.state === "running") line = `Phase ${monthLabel(it.phase_monat)} läuft bis ${fmt(p.end)} · noch ${p.days} ${p.days === 1 ? "Tag" : "Tage"}.`;
+  if (p.state === "done") line = `Phase ${monthLabel(it.phase_monat)} (${range}) abgeschlossen.`;
+  if (p.state === "due") line = `<b class="warn">Entscheid fällig.</b> Phase ${monthLabel(it.phase_monat)} ist am ${fmt(p.end)} zu Ende gegangen.`;
+  if (p.state === "decided") {
+    const d = it.entscheid_datum ? ` am ${fmt(it.entscheid_datum)}` : "";
+    line = `Entscheid: <b>${esc(it.entscheid)}</b>${d}.${it.entscheid_notiz ? " " + esc(it.entscheid_notiz) : ""}`;
+    acts = `<button class="btn primary" type="button" data-act="done">${it.entscheid === "Zurücknehmen" ? "Abgeholt" : "Erledigt"}</button><button class="btn" type="button" data-act="undecide">Entscheid ändern</button>`;
+  }
+  if (p.state === "due" || p.state === "running") {
+    acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Upcycling …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
+  }
+  return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Phase</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
+}
+function saleBlock(it) {
+  if (it.status !== "Verkauft") return "";
+  const prov = it.verkauf_provision != null ? Number(it.verkauf_provision) : ownerProv(it.owner_id);
+  const self = it.owner_id === SELF;
+  return `<div class="box"><div class="sec" style="margin:0 0 6px">Verkauf</div>
+    <dl class="f compact"><dt>Verkauft am</dt><dd>${esc(fmt(it.verkauf_datum) || "–")}</dd><dt>Verkaufspreis</dt><dd>${esc(chf(it.verkauf_preis))}</dd>
+    ${self ? "" : `<dt>Anteil Owner</dt><dd>${esc(chf(share(it.verkauf_preis, prov)))} <span class="hint">(${100 - prov} %)</span></dd><dt>Ausbezahlt</dt><dd>${it.ausbezahlt_am ? esc(fmt(it.ausbezahlt_am)) : `<span class="warn">offen · fällig ${esc(fmt(payoutDate(it.verkauf_datum)))}</span>`}</dd>`}</dl></div>`;
+}
+function rentalBlock(it) {
+  const rs = RENTALS.filter(r => r.item_id === it.id).sort((a, b) => String(b.von).localeCompare(String(a.von)));
+  if (!rs.length) return "";
+  return `<div class="box"><div class="sec" style="margin:0 0 6px">Vermietungen</div>
+    <ul class="rlist">${rs.map(r => `<li><span>${esc(fmt(r.von))}${r.bis ? " – " + esc(fmt(r.bis)) : ""}</span><span>${esc(chf(r.betrag))}</span><span class="hint">${r.zurueck_am ? "zurück " + esc(fmt(r.zurueck_am)) : "unterwegs"}${it.owner_id !== SELF ? (r.ausbezahlt_am ? " · ausbezahlt" : " · Anteil offen") : ""}</span></li>`).join("")}</ul></div>`;
+}
 function showItem(id, editing) {
-  const it = ITEMS.find(x => x.id === id); if (!it) return;
+  const it = ITEMS.find(x => x.id === id); if (!it) return closePanel();
+  if (editing) return showItemEdit(id);
   const ls = looksOf(id);
-  const cats = [...new Set(BASE_CATS.concat(ITEMS.map(i => i.kategorie).filter(Boolean)))];
-  const val = k => {
-    const v = it[k];
-    if (editing) {
-      if (k === "status") return `<select id="e-${k}">${STATUSES.map(s => `<option ${s === (v || "Entwurf") ? "selected" : ""}>${s}</option>`).join("")}</select>`;
-      if (k === "kategorie") return `<select id="e-${k}">${cats.map(c => `<option ${c === v ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
-      return `<input id="e-${k}" value="${esc(v == null ? "" : v)}" ${k === "preis" ? 'inputmode="decimal"' : ""}>`;
-    }
-    if (k === "preis") return `<span class="${v == null ? "warn" : ""}">${esc(priceTxt(v))}</span>`;
-    if (k === "status") return pill(v);
-    if (v == null || v === "") return `<span class="warn">offen</span>`;
-    return `<span class="${isOpen(v) ? "warn" : ""}">${esc(v)}</span>`;
+  const v = k => {
+    const x = it[k];
+    if (k === "preis") return `<span class="${x == null ? "warn" : ""}">${esc(priceTxt(x))}</span>`;
+    if (x == null || x === "") return `<span class="warn">offen</span>`;
+    return `<span class="${isOpen(x) ? "warn" : ""}">${esc(x)}</span>`;
   };
   openPanel(`
     <div class="phead"><span class="sub">Teil</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
@@ -213,44 +367,86 @@ function showItem(id, editing) {
         <div class="big">${imgTag(it.foto_pfad, it.titel)}</div>
         <div class="rowsmall">
           <label class="btn" for="rep-lib">Foto ersetzen</label>
-          <input id="rep-lib" type="file" accept="image/*" hidden data-replace="${esc(id)}">
+          <input id="rep-lib" type="file" accept="image/*" hidden>
         </div>
       </div>
       <div>
         <div class="nr"><small>Anzeigenummer</small>${esc(it.nr)}</div>
-        ${editing ? `<label class="sec" for="e-titel">Titel</label><input id="e-titel" class="search" style="width:100%" value="${esc(it.titel)}">` : `<h2 class="dt">${esc(it.titel)}</h2>`}
-        ${editing ? `<label class="sec" for="e-notiz">Beschreibung</label><textarea id="e-notiz" class="search" style="width:100%" rows="3">${esc(it.notiz || "")}</textarea>` : `<p class="desc">${esc(it.notiz || "")}</p>`}
-        <dl class="f">${FIELDS.map(([k, l]) => `<dt>${l}</dt><dd>${val(k)}</dd>`).join("")}</dl>
-        <div class="row">${editing
-          ? `<button class="btn primary" type="button" data-save="${esc(id)}">Speichern</button><button class="btn" type="button" data-view="${esc(id)}">Abbrechen</button>`
-          : `<button class="btn" type="button" data-edit="${esc(id)}">Bearbeiten</button><button class="btn danger" type="button" data-del="${esc(id)}">Löschen</button>`}</div>
+        <h2 class="dt">${esc(it.titel)}</h2>
+        <p class="desc">${esc(it.notiz || "")}</p>
+        <div class="statusrow">${pill(it.status)}<span class="price">${esc(priceTxt(it.preis))}</span></div>
+        <div class="rowsmall">${statusActions(it)}</div>
+        <div id="act"></div>
+        ${phaseBlock(it)}
+        ${saleBlock(it)}
+        ${rentalBlock(it)}
+        <dl class="f">
+          <dt>Owner</dt><dd><button class="linkbtn" type="button" data-owner="${esc(it.owner_id)}">${esc(ownerName(it.owner_id))} · ${esc(it.owner_id)}</button></dd>
+          <dt>Phase</dt><dd>${esc(monthLabel(it.phase_monat))}</dd>
+          ${FIELDS.map(([k, l]) => `<dt>${l}</dt><dd>${v(k)}</dd>`).join("")}
+        </dl>
+        <div class="row">
+          <button class="btn" type="button" data-edit="${esc(id)}">Bearbeiten</button>
+          <button class="btn danger" type="button" data-del="${esc(id)}">Löschen</button>
+        </div>
         <div class="sec">In Looks</div>
         ${ls.length ? `<div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.style || "")} · ${esc(l.name)}</button>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
         <div class="tech">Feste ID (ändert sich nie, auch wenn die Anzeigenummer wechselt):<br>${esc(it.id)}</div>
       </div>
-    </div>`);
+    </div>`, { type: "item", id });
   const rep = $("rep-lib");
   rep.addEventListener("change", () => { if (rep.files[0]) replacePhoto(id, rep.files[0]); });
 }
 
+function showItemEdit(id) {
+  const it = ITEMS.find(x => x.id === id); if (!it) return;
+  const cats = [...new Set(BASE_CATS.concat(ITEMS.map(i => i.kategorie).filter(Boolean)))];
+  const inp = k => {
+    const x = it[k];
+    if (k === "kategorie") return `<select id="e-${k}">${cats.map(c => `<option ${c === x ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
+    return `<input id="e-${k}" value="${esc(x == null ? "" : x)}" ${k === "preis" ? 'inputmode="decimal"' : ""}>`;
+  };
+  openPanel(`
+    <div class="phead"><span class="sub">Teil bearbeiten</span><button class="btn ghost close" type="button" data-view="${esc(id)}">Abbrechen ✕</button></div>
+    <div class="d">
+      <div class="big">${imgTag(it.foto_pfad, it.titel)}</div>
+      <div>
+        <div class="nr"><small>Anzeigenummer</small>${esc(it.nr)}</div>
+        <label class="sec" for="e-titel">Titel</label><input id="e-titel" class="search" style="width:100%" value="${esc(it.titel)}">
+        <label class="sec" for="e-notiz">Beschreibung</label><textarea id="e-notiz" class="search" style="width:100%" rows="3">${esc(it.notiz || "")}</textarea>
+        <dl class="f">
+          <dt>Owner</dt><dd><select id="e-owner_id">${ownerOptions(it.owner_id)}</select></dd>
+          <dt>Phase</dt><dd><select id="e-phase_monat">${phaseOptions(it.phase_monat)}</select></dd>
+          <dt>Status</dt><dd><select id="e-status">${STATUSES.map(s => `<option ${s === (it.status || "Entwurf") ? "selected" : ""}>${s}</option>`).join("")}</select></dd>
+          ${FIELDS.map(([k, l]) => `<dt>${l}</dt><dd>${inp(k)}</dd>`).join("")}
+        </dl>
+        <div class="row"><button class="btn primary" type="button" data-save="${esc(id)}">Speichern</button><button class="btn" type="button" data-view="${esc(id)}">Abbrechen</button></div>
+      </div>
+    </div>`, { type: "itemedit", id });
+}
+
+async function patchItem(id, patch, msg) {
+  const { data, error } = await sb.from("items").update(patch).eq("id", id).select().single();
+  if (error) { toast(nice(error), 4500); return null; }
+  ITEMS = ITEMS.map(x => x.id === id ? data : x);
+  renderAll(); if (msg) toast(msg);
+  return data;
+}
 async function saveEdit(id, btn) {
   const patch = {};
-  ["titel", "notiz"].concat(FIELDS.map(f => f[0])).forEach(k => {
+  ["titel", "notiz", "owner_id", "phase_monat", "status"].concat(FIELDS.map(f => f[0])).forEach(k => {
     const el = $("e-" + k); if (!el) return;
     let v = el.value.trim();
-    if (k === "preis") v = parsePrice(v);
-    else if (v === "") v = null;
+    if (k === "preis") v = parsePrice(v); else if (v === "") v = null;
     patch[k] = v;
   });
   if (!patch.titel) { toast("Der Titel darf nicht leer sein."); return; }
+  if (!patch.owner_id) patch.owner_id = SELF;
   busy(btn, true);
-  const { data, error } = await sb.from("items").update(patch).eq("id", id).select().single();
+  const ok = await patchItem(id, patch, "Gespeichert");
   busy(btn, false);
-  if (error) { toast(nice(error), 4000); return; }
-  ITEMS = ITEMS.map(x => x.id === id ? data : x);
-  renderAll(); showItem(id, false); toast("Gespeichert");
+  if (ok) showItem(id);
 }
-
 async function replacePhoto(id, file) {
   const it = ITEMS.find(x => x.id === id); if (!it) return;
   toast("Foto wird hochgeladen …", 10000);
@@ -262,26 +458,238 @@ async function replacePhoto(id, file) {
     if (error) { await sb.storage.from(BUCKET).remove([path]); throw error; }
     await removePhoto(it.foto_pfad).catch(() => {});
     ITEMS = ITEMS.map(x => x.id === id ? data : x);
-    renderAll(); showItem(id, false); toast("Foto ersetzt");
+    renderAll(); showItem(id); toast("Foto ersetzt");
   } catch (err) { toast(nice(err), 4500); }
 }
 
-let delArmed = null;
+/* Zwei-Tipp-Bestätigung für heikle Knöpfe */
+const armed = new Map();
+function confirmTap(btn, key, label) {
+  if (armed.get(key)) { armed.delete(key); return true; }
+  armed.set(key, true); const orig = btn.textContent; btn.textContent = label || "Sicher? Nochmals tippen";
+  setTimeout(() => { if (armed.get(key)) { armed.delete(key); if (btn.isConnected) btn.textContent = orig; } }, 4000);
+  return false;
+}
 async function deleteItem(id, btn) {
-  if (delArmed !== id) {
-    delArmed = id; btn.textContent = "Wirklich löschen? Nochmals tippen";
-    setTimeout(() => { if (delArmed === id) { delArmed = null; if (btn.isConnected) btn.textContent = "Löschen"; } }, 4000);
-    return;
-  }
-  delArmed = null;
+  if (!confirmTap(btn, "del" + id, "Wirklich löschen? Nochmals tippen")) return;
   const it = ITEMS.find(x => x.id === id);
   busy(btn, true, "Löschen …");
   const { error } = await sb.from("items").delete().eq("id", id);
   if (error) { busy(btn, false); toast(nice(error), 4000); return; }
   await removePhoto(it && it.foto_pfad).catch(() => {});
   ITEMS = ITEMS.filter(x => x.id !== id);
+  RENTALS = RENTALS.filter(r => r.item_id !== id);
   LOOKS = LOOKS.map(l => Object.assign({}, l, { items: l.items.filter(x => x !== id) }));
   closePanel(); renderAll(); toast((it ? it.nr : "Teil") + " gelöscht");
+}
+
+/* ---------- Schnellaktionen am Teil ---------- */
+function actForm(html) { const a = $("act"); if (a) { a.innerHTML = `<form class="box actform" id="actForm" novalidate>${html}</form>`; a.scrollIntoView({ block: "nearest" }); const f = a.querySelector("input,select"); if (f) f.focus({ preventScroll: true }); } }
+function satOptions() { return nextSaturdays(8).map(d => `<option value="${iso(d)}">${fmt(d)}</option>`).join(""); }
+
+function openAction(kind, it) {
+  const prov = ownerProv(it.owner_id), self = it.owner_id === SELF;
+  if (kind === "sell") {
+    actForm(`<div class="sec" style="margin:0">Verkauf erfassen</div>
+      <div class="two"><label>Verkaufspreis CHF<input id="a-preis" inputmode="decimal" value="${esc(it.preis ?? "")}"></label>
+      <label>Datum<input id="a-datum" type="date" value="${iso(today())}"></label></div>
+      ${self ? "" : `<p class="hint" id="a-info"></p>`}
+      <div class="rowsmall"><button class="btn primary" type="submit">Als verkauft speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
+    const upd = () => { const i = $("a-info"); if (!i) return; const p = parsePrice($("a-preis").value); i.textContent = p == null ? "" : `Anteil ${ownerName(it.owner_id)}: ${chf(share(p, prov))} (${100 - prov} %) · Frankly: ${chf(round2(p - share(p, prov)))} · Auszahlung ${fmt(payoutDate($("a-datum").value))}`; };
+    $("a-preis").addEventListener("input", upd); $("a-datum").addEventListener("input", upd); upd();
+    $("actForm").onsubmit = async e => {
+      e.preventDefault(); const p = parsePrice($("a-preis").value);
+      if (p == null) return toast("Bitte den Verkaufspreis eingeben.");
+      const btn = e.submitter; busy(btn, true);
+      const ok = await patchItem(it.id, { status: "Verkauft", verkauf_preis: p, verkauf_datum: $("a-datum").value || iso(today()), verkauf_provision: prov, ausbezahlt_am: null }, `${it.nr} verkauft`);
+      busy(btn, false); if (ok) showItem(it.id);
+    };
+  }
+  if (kind === "rent") {
+    actForm(`<div class="sec" style="margin:0">Vermietung erfassen</div>
+      <div class="two"><label>Mietbetrag CHF<input id="a-betrag" inputmode="decimal"></label><label>Von<input id="a-von" type="date" value="${iso(today())}"></label></div>
+      <label>Bis (geplante Rückgabe)<input id="a-bis" type="date"></label>
+      ${self ? "" : `<p class="hint">Die Miete wird ${100 - prov}/${prov} geteilt und am letzten Samstag des Monats ausbezahlt.</p>`}
+      <div class="rowsmall"><button class="btn primary" type="submit">Vermietung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
+    $("actForm").onsubmit = async e => {
+      e.preventDefault(); const b = parsePrice($("a-betrag").value);
+      if (b == null) return toast("Bitte den Mietbetrag eingeben.");
+      const btn = e.submitter; busy(btn, true);
+      const { data, error } = await sb.from("vermietungen").insert({ item_id: it.id, betrag: b, von: $("a-von").value || iso(today()), bis: $("a-bis").value || null, provision_prozent: prov }).select().single();
+      if (error) { busy(btn, false); return toast(nice(error), 4500); }
+      RENTALS.push(data);
+      const ok = await patchItem(it.id, { status: "Vermietet" }, `${it.nr} vermietet`);
+      busy(btn, false); if (ok) showItem(it.id);
+    };
+  }
+  if (kind === "lower") {
+    actForm(`<div class="sec" style="margin:0">Preis senken</div>
+      <div class="two"><label>Neuer Preis CHF<input id="a-preis" inputmode="decimal" placeholder="${esc(it.preis ?? "")}"></label>
+      <label>Nächste Phase<select id="a-phase">${phaseOptions(nextPhase(it.phase_monat))}</select></label></div>
+      <p class="hint">Bisher ${esc(priceTxt(it.preis))}. Das Teil bleibt im Laden und startet in die nächste Phase.</p>
+      <div class="rowsmall"><button class="btn primary" type="submit">Preis senken</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
+    $("actForm").onsubmit = async e => {
+      e.preventDefault(); const p = parsePrice($("a-preis").value);
+      if (p == null) return toast("Bitte den neuen Preis eingeben.");
+      if (it.preis != null && p >= Number(it.preis)) return toast("Der neue Preis muss tiefer sein als der bisherige.");
+      const btn = e.submitter; busy(btn, true);
+      const ok = await patchItem(it.id, { preis: p, phase_monat: $("a-phase").value || null, entscheid: null, entscheid_datum: null, entscheid_notiz: null, status: it.status === "Entwurf" ? "Entwurf" : "Verfügbar" }, `Neuer Preis ${chf(p)}`);
+      busy(btn, false); if (ok) showItem(it.id);
+    };
+  }
+  if (kind === "upcycle") {
+    actForm(`<div class="sec" style="margin:0">Upcycling-Termin</div>
+      <div class="two"><label>Datum<input id="a-datum" type="date" value="${iso(nextSaturdays(1)[0])}"></label><label>Notiz (Uhrzeit, Idee)<input id="a-notiz" placeholder="z.B. 14 Uhr"></label></div>
+      <div class="rowsmall"><button class="btn primary" type="submit">Termin speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
+    $("actForm").onsubmit = async e => {
+      e.preventDefault(); if (!$("a-datum").value) return toast("Bitte ein Datum wählen.");
+      const btn = e.submitter; busy(btn, true);
+      const ok = await patchItem(it.id, { entscheid: "Upcycling", entscheid_datum: $("a-datum").value, entscheid_notiz: val("a-notiz") }, "Upcycling-Termin gespeichert");
+      busy(btn, false); if (ok) showItem(it.id);
+    };
+  }
+  if (kind === "takeback") {
+    actForm(`<div class="sec" style="margin:0">Zurücknehmen · Abholung am Samstag</div>
+      <label>Abhol-Samstag<select id="a-datum">${satOptions()}</select></label>
+      <div class="rowsmall"><button class="btn primary" type="submit">Abholung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
+    $("actForm").onsubmit = async e => {
+      e.preventDefault(); const btn = e.submitter; busy(btn, true);
+      const ok = await patchItem(it.id, { entscheid: "Zurücknehmen", entscheid_datum: $("a-datum").value }, "Abholung gespeichert");
+      busy(btn, false); if (ok) showItem(it.id);
+    };
+  }
+}
+
+async function runAct(kind, btn) {
+  const id = panelState && panelState.id, it = ITEMS.find(x => x.id === id); if (!it) return;
+  if (kind === "cancel") { const a = $("act"); if (a) a.innerHTML = ""; return; }
+  if (["sell", "rent", "lower", "upcycle", "takeback"].includes(kind)) return openAction(kind, it);
+  if (kind === "setstatus") { busy(btn, true); const ok = await patchItem(id, { status: btn.dataset.v }, `${it.nr}: ${btn.dataset.v}`); if (ok) showItem(id); else busy(btn, false); return; }
+  if (kind === "returned") {
+    busy(btn, true);
+    const open = RENTALS.filter(r => r.item_id === id && !r.zurueck_am);
+    for (const r of open) {
+      const { data, error } = await sb.from("vermietungen").update({ zurueck_am: iso(today()) }).eq("id", r.id).select().single();
+      if (error) { busy(btn, false); return toast(nice(error), 4500); }
+      RENTALS = RENTALS.map(x => x.id === r.id ? data : x);
+    }
+    const ok = await patchItem(id, { status: "Verfügbar" }, `${it.nr} ist zurück`); if (ok) showItem(id); else busy(btn, false); return;
+  }
+  if (kind === "unsell") {
+    if (!confirmTap(btn, "unsell" + id, "Verkauf wirklich rückgängig? Nochmals tippen")) return;
+    busy(btn, true);
+    const ok = await patchItem(id, { status: "Verfügbar", verkauf_preis: null, verkauf_datum: null, verkauf_provision: null, ausbezahlt_am: null }, "Verkauf rückgängig gemacht"); if (ok) showItem(id); else busy(btn, false); return;
+  }
+  if (kind === "undecide") { busy(btn, true); const ok = await patchItem(id, { entscheid: null, entscheid_datum: null, entscheid_notiz: null }, "Entscheid zurückgesetzt"); if (ok) showItem(id); else busy(btn, false); return; }
+  if (kind === "done") {
+    busy(btn, true);
+    const ok = await patchItem(id, { status: "Zurückgegeben" }, it.entscheid === "Zurücknehmen" ? `${it.nr} abgeholt` : `${it.nr} erledigt`); if (ok) showItem(id); else busy(btn, false); return;
+  }
+}
+
+/* ---------- Owner ---------- */
+function showOwner(oid) {
+  const o = ownerOf(oid); if (!o) return closePanel();
+  const s = ownerStats(oid), posts = oid === SELF ? [] : openPosts(oid), total = round2(posts.reduce((a, p) => a + p.anteil, 0));
+  const its = ITEMS.filter(i => i.owner_id === oid).sort((a, b) => a.nr_num - b.nr_num);
+  const dueTotal = round2(posts.filter(p => p.faellig <= today()).reduce((a, p) => a + p.anteil, 0));
+  openPanel(`
+    <div class="phead"><span class="sub">Owner</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
+    <div class="nr"><small>Owner</small>${esc(o.id)}</div>
+    <h2 class="dt">${esc(o.profilname)}</h2>
+    <p class="desc">${esc(o.stil || "")}</p>
+    <div class="ostats lg"><span><b>${s.total}</b> Teile</span><span><b>${s.shop}</b> im Laden</span><span><b>${s.sold}</b> verkauft</span>${s.due ? `<span class="warn"><b>${s.due}</b> Entscheid fällig</span>` : ""}</div>
+    ${oid === SELF ? `<p class="hint">Eigene Teile von Frankly: keine Provision, keine Abrechnung.</p>` : `
+    <div class="box ${total > 0 ? "alert" : ""}">
+      <div class="sec" style="margin:0 0 6px">Abrechnung · offen ${esc(chf(total))}</div>
+      ${posts.length ? `
+      <div class="tablewrap"><table class="tbl">
+        <thead><tr><th>Teil</th><th>Art</th><th>Betrag</th><th>Anteil</th><th>Fällig</th></tr></thead>
+        <tbody>${posts.map(p => `<tr><td><button class="linkbtn" type="button" data-item="${esc(p.kind === "item" ? p.id : (RENTALS.find(r => r.id === p.id) || {}).item_id)}">${esc(p.nr || "")}</button> ${esc(p.titel || "")}</td><td>${p.art}</td><td>${esc(chf(p.betrag))}</td><td><b>${esc(chf(p.anteil))}</b></td><td class="${p.faellig <= today() ? "warn" : ""}">${esc(fmt(p.faellig))}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <p class="hint">Davon heute fällig: ${esc(chf(dueTotal))}. Anteil Owner = Betrag minus ${esc(Number(o.provision_prozent))} % Provision.</p>
+      <div class="rowsmall"><button class="btn primary" type="button" data-payout="${esc(oid)}">Alles Offene als ausbezahlt markieren</button></div>`
+      : `<p class="hint">Nichts offen. Alles ist ausbezahlt.</p>`}
+    </div>`}
+    <dl class="f">
+      <dt>Provision</dt><dd>${esc(Number(o.provision_prozent))} %</dd>
+      <dt>Voller Name</dt><dd>${esc(o.voller_name || "–")}</dd>
+      <dt>E-Mail</dt><dd>${esc(o.email || "–")}</dd>
+      <dt>Telefon</dt><dd>${esc(o.telefon || "–")}</dd>
+      <dt>Instagram</dt><dd>${esc(o.instagram || "–")}</dd>
+      <dt>Öffentlich</dt><dd>${o.oeffentlich ? "Ja, Profil darf gezeigt werden" : "Nein"}</dd>
+      <dt>Vereinbarung</dt><dd>${esc(fmt(o.vereinbarung_datum) || "–")}</dd>
+      <dt>Notiz</dt><dd>${esc(o.notiz || "–")}</dd>
+    </dl>
+    <div class="row"><button class="btn" type="button" data-oedit="${esc(oid)}">Bearbeiten</button>${oid !== SELF ? `<button class="btn danger" type="button" data-odel="${esc(oid)}">Löschen</button>` : ""}</div>
+    <div class="sec">Teile von ${esc(o.profilname)}</div>
+    ${its.length ? `<div class="grid">${its.map(itemCard).join("")}</div>` : `<p class="hint">Noch keine Teile.</p>`}
+  `, { type: "owner", id: oid });
+}
+function ownerForm(o) {
+  o = o || {};
+  const isNew = !o.id;
+  openPanel(`
+    <div class="phead"><span class="sub">${isNew ? "Neuer Owner" : "Owner bearbeiten"}</span><button class="btn ghost close" type="button" ${isNew ? "data-close" : `data-owner="${esc(o.id)}"`}>Abbrechen ✕</button></div>
+    <form class="form" id="ownerForm" novalidate>
+      ${isNew ? `<div class="next"><div class="nr"><small>Owner-Nummer</small>wird vergeben</div><span class="hint" style="max-width:24ch">z.B. OWN-002. Du musst nichts eintippen.</span></div>` : `<div class="nr"><small>Owner</small>${esc(o.id)}</div>`}
+      <div class="sec" style="margin:4px 0 0">Profil · kann später öffentlich sein</div>
+      <label>Profilname *<input id="o-profilname" value="${esc(o.profilname || "")}" placeholder="z.B. Mira oder ein Alias"></label>
+      <label>Stil<input id="o-stil" value="${esc(o.stil || "")}" placeholder="z.B. edgy, viel Schwarz, Vintage-Denim"></label>
+      <label>Instagram<input id="o-instagram" value="${esc(o.instagram || "")}" placeholder="@name (freiwillig)"></label>
+      <label class="check"><input id="o-oeffentlich" type="checkbox" ${o.oeffentlich ? "checked" : ""}> Profil darf öffentlich gezeigt werden (Zustimmung der Person)</label>
+      <div class="sec" style="margin:8px 0 0">Intern · nie öffentlich</div>
+      <label>Voller Name<input id="o-voller_name" value="${esc(o.voller_name || "")}"></label>
+      <div class="two"><label>E-Mail<input id="o-email" type="email" value="${esc(o.email || "")}"></label><label>Telefon<input id="o-telefon" type="tel" value="${esc(o.telefon || "")}"></label></div>
+      <div class="two"><label>Provision %<input id="o-provision_prozent" inputmode="decimal" value="${esc(o.provision_prozent ?? 10)}"></label><label>Vereinbarung vom<input id="o-vereinbarung_datum" type="date" value="${esc(o.vereinbarung_datum || "")}"></label></div>
+      <label>Notiz<textarea id="o-notiz" rows="2">${esc(o.notiz || "")}</textarea></label>
+      <p class="hint">Bankdaten (IBAN) bitte nicht hier speichern, sondern im E-Banking.</p>
+      <div class="row" style="margin-top:0"><button class="btn primary" type="submit">${isNew ? "Owner anlegen" : "Speichern"}</button></div>
+    </form>`, { type: "ownerform", id: o.id });
+  $("ownerForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const row = { profilname: val("o-profilname"), stil: val("o-stil"), instagram: val("o-instagram"), oeffentlich: $("o-oeffentlich").checked,
+      voller_name: val("o-voller_name"), email: val("o-email"), telefon: val("o-telefon"), vereinbarung_datum: val("o-vereinbarung_datum"), notiz: val("o-notiz") };
+    const prov = parsePrice($("o-provision_prozent").value);
+    row.provision_prozent = prov == null ? 10 : Math.min(100, prov);
+    if (!row.profilname) return toast("Bitte einen Profilnamen eingeben.");
+    const btn = e.submitter; busy(btn, true);
+    const q = isNew ? sb.from("owners").insert(row).select().single() : sb.from("owners").update(row).eq("id", o.id).select().single();
+    const { data, error } = await q;
+    busy(btn, false);
+    if (error) return toast(nice(error), 4500);
+    OWNERS = isNew ? OWNERS.concat(data).sort((a, b) => a.id.localeCompare(b.id)) : OWNERS.map(x => x.id === data.id ? data : x);
+    renderAll(); showOwner(data.id); toast(isNew ? `${data.id} angelegt` : "Gespeichert");
+  });
+}
+async function payout(oid, btn) {
+  const posts = openPosts(oid);
+  if (!posts.length) return;
+  const total = round2(posts.reduce((a, p) => a + p.anteil, 0));
+  if (!confirmTap(btn, "pay" + oid, `${chf(total)} an ${ownerName(oid)} ausbezahlt? Nochmals tippen`)) return;
+  busy(btn, true, "Wird gespeichert …");
+  const d = iso(today());
+  const itemIds = posts.filter(p => p.kind === "item").map(p => p.id), rentIds = posts.filter(p => p.kind === "rental").map(p => p.id);
+  if (itemIds.length) {
+    const { data, error } = await sb.from("items").update({ ausbezahlt_am: d }).in("id", itemIds).select();
+    if (error) { busy(btn, false); return toast(nice(error), 4500); }
+    (data || []).forEach(n => { ITEMS = ITEMS.map(x => x.id === n.id ? n : x); });
+  }
+  if (rentIds.length) {
+    const { data, error } = await sb.from("vermietungen").update({ ausbezahlt_am: d }).in("id", rentIds).select();
+    if (error) { busy(btn, false); return toast(nice(error), 4500); }
+    (data || []).forEach(n => { RENTALS = RENTALS.map(x => x.id === n.id ? n : x); });
+  }
+  renderAll(); showOwner(oid); toast(`${chf(total)} als ausbezahlt markiert`);
+}
+async function deleteOwner(oid, btn) {
+  if (ITEMS.some(i => i.owner_id === oid)) return toast("Diese Person hat noch Teile. Ordne die Teile zuerst jemand anderem zu.", 4500);
+  if (!confirmTap(btn, "odel" + oid, "Wirklich löschen? Nochmals tippen")) return;
+  busy(btn, true, "Löschen …");
+  const { error } = await sb.from("owners").delete().eq("id", oid);
+  if (error) { busy(btn, false); return toast(nice(error), 4500); }
+  OWNERS = OWNERS.filter(o => o.id !== oid);
+  closePanel(); renderAll(); toast(`${oid} gelöscht`);
 }
 
 /* ---------- Look anzeigen ---------- */
@@ -298,21 +706,14 @@ function showLook(id) {
         <p class="desc">${esc(l.konzept || "")}</p>
         <dl class="f"><dt>Status</dt><dd>${esc(l.status || "")}</dd><dt>Notiz</dt><dd>${esc(l.bemerkung || "")}</dd></dl>
         <div class="sec">Teile in diesem Look</div>
-        <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? `
-          <button class="card" type="button" data-item="${esc(iid)}"><div class="ph">${imgTag(it.foto_pfad, it.titel)}<span class="tag">${esc(it.nr)}</span></div><span class="title">${esc(it.titel)}</span></button>` : ""; }).join("")}</div>
+        <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? itemCard(it) : ""; }).join("")}</div>
         <div class="row"><button class="btn danger" type="button" data-dellook="${esc(l.id)}">Look löschen</button></div>
         <p class="hint">Beim Löschen eines Looks bleiben die Teile erhalten.</p>
       </div>
-    </div>`);
+    </div>`, { type: "look", id });
 }
-let delLookArmed = null;
 async function deleteLook(id, btn) {
-  if (delLookArmed !== id) {
-    delLookArmed = id; btn.textContent = "Wirklich löschen? Nochmals tippen";
-    setTimeout(() => { if (delLookArmed === id) { delLookArmed = null; if (btn.isConnected) btn.textContent = "Look löschen"; } }, 4000);
-    return;
-  }
-  delLookArmed = null;
+  if (!confirmTap(btn, "dellook" + id, "Wirklich löschen? Nochmals tippen")) return;
   const l = LOOKS.find(x => x.id === id);
   busy(btn, true, "Löschen …");
   const { error } = await sb.from("looks").delete().eq("id", id);
@@ -361,16 +762,20 @@ async function takePhoto(file) {
 }
 
 /* ---------- Neues Teil ---------- */
-function nextNrHint() { const m = ITEMS.reduce((a, it) => Math.max(a, it.nr_num || 0), 0); return "FR-" + String(m + 1).padStart(6, "0"); }
 function showAdd() {
   const cats = [...new Set(BASE_CATS.concat(ITEMS.map(i => i.kategorie).filter(Boolean)))];
+  const owner = ownerOf(lastOwner) ? lastOwner : SELF;
   openPanel(`
     <div class="phead"><span class="sub">Neues Teil</span><button class="btn ghost close" type="button" data-close>Abbrechen ✕</button></div>
     <div class="d">
       ${photoPicker()}
       <form class="form" id="addForm" novalidate>
-        <div class="next"><div class="nr"><small>Bekommt automatisch</small>${nextNrHint()}</div><span class="hint" style="max-width:20ch">Du musst keine Nummer eintippen.</span></div>
+        <div class="next"><div class="nr"><small>Bekommt automatisch</small><span id="nextNr">…</span></div><span class="hint" style="max-width:20ch">Du musst keine Nummer eintippen.</span></div>
         <label>Titel *<input id="f-titel" required placeholder="z.B. Black Leather Biker Jacket"></label>
+        <div class="two">
+          <label>Owner<select id="f-owner">${ownerOptions(owner)}</select></label>
+          <label>Phase<select id="f-phase">${phaseOptions(owner === SELF ? "" : defaultPhase())}</select></label>
+        </div>
         <div class="two">
           <label>Kategorie<select id="f-kategorie">${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select></label>
           <label>Preis CHF<input id="f-preis" inputmode="decimal" placeholder="offen"></label>
@@ -383,10 +788,14 @@ function showAdd() {
         <p class="hint" id="formMsg">Pflicht sind nur Foto und Titel. Alles andere kannst du später ergänzen.</p>
         <div class="row" style="margin-top:0"><button class="btn primary" id="saveNew" type="submit" disabled>Teil anlegen</button></div>
       </form>
-    </div>`);
+    </div>`, { type: "add" });
   wirePicker(checkReady);
+  let phaseTouched = false;
+  $("f-phase").addEventListener("change", () => { phaseTouched = true; });
+  $("f-owner").addEventListener("change", () => { if (!phaseTouched) $("f-phase").innerHTML = phaseOptions($("f-owner").value === SELF ? "" : defaultPhase()); });
   $("f-titel").addEventListener("input", checkReady);
   $("addForm").addEventListener("submit", e => { e.preventDefault(); createItem(); });
+  sb.rpc("naechste_item_nr").then(({ data, error }) => { const el = $("nextNr"); if (el) el.textContent = error || !data ? "wird vergeben" : data; });
 }
 function checkReady() {
   const btn = $("saveNew"); if (!btn) return;
@@ -396,18 +805,19 @@ function checkReady() {
 }
 async function createItem() {
   const btn = $("saveNew"); if (btn.disabled) return;
-  const v = id => { const x = $(id).value.trim(); return x === "" ? null : x; };
-  const id = uuid(), path = `items/${id}.jpg`;
   busy(btn, true, "Wird hochgeladen …");
   try {
+    const id = uuid(), path = `items/${id}.jpg`;
     await uploadPhoto(path, pendingBlob);
-    const row = { id, titel: v("f-titel"), kategorie: v("f-kategorie"), groesse: v("f-groesse"), marke: v("f-marke"),
-      preis: parsePrice($("f-preis").value), notiz: v("f-notiz"), foto_pfad: path };
+    const owner = $("f-owner").value || SELF;
+    const row = { id, titel: val("f-titel"), kategorie: val("f-kategorie"), groesse: val("f-groesse"), marke: val("f-marke"),
+      preis: parsePrice($("f-preis").value), notiz: val("f-notiz"), foto_pfad: path, owner_id: owner, phase_monat: $("f-phase").value || null };
     const { data, error } = await sb.from("items").insert(row).select().single();
     if (error) { await sb.storage.from(BUCKET).remove([path]); throw error; }
+    lastOwner = owner;
     ITEMS.push(data); lastAdded = data.id; pendingBlob = null;
-    cat = "Alle"; $("q").value = ""; setTab("items"); renderAll();
-    showItem(data.id, false); toast(data.nr + " angelegt");
+    cat = "Alle"; $("q").value = ""; $("fstat").value = "alle"; setTab("items"); renderAll();
+    showItem(data.id); toast(data.nr + " angelegt");
   } catch (err) { busy(btn, false); toast(nice(err), 4500); }
 }
 
@@ -415,7 +825,7 @@ async function createItem() {
 let pickedItems = [];
 function showAddLook() {
   pickedItems = [];
-  const all = ITEMS.slice().sort((a, b) => a.nr_num - b.nr_num);
+  const all = ITEMS.filter(i => i.status !== "Zurückgegeben").sort((a, b) => a.nr_num - b.nr_num);
   openPanel(`
     <div class="phead"><span class="sub">Neuer Look</span><button class="btn ghost close" type="button" data-close>Abbrechen ✕</button></div>
     <form class="form" id="lookForm" novalidate>
@@ -433,7 +843,7 @@ function showAddLook() {
       <div style="max-width:260px">${photoPicker()}</div>
       <p class="hint" id="lookMsg">Wähle mindestens 2 Teile und gib einen Namen ein.</p>
       <div class="row" style="margin-top:0"><button class="btn primary" id="saveLook" type="submit" disabled>Look anlegen</button></div>
-    </form>`);
+    </form>`, { type: "addlook" });
   wirePicker(checkLook);
   $("l-name").addEventListener("input", checkLook);
   $("pickgrid").addEventListener("click", e => {
@@ -452,11 +862,11 @@ function checkLook() {
 }
 async function createLook() {
   const btn = $("saveLook"); if (btn.disabled) return;
-  const id = uuid();
-  const path = pendingBlob ? `looks-neu/${id}.jpg` : null;
-  const parts = pickedItems.map(x => ITEMS.find(i => i.id === x)).filter(Boolean);
   busy(btn, true, "Wird gespeichert …");
   try {
+    const id = uuid();
+    const path = pendingBlob ? `looks-neu/${id}.jpg` : null;
+    const parts = pickedItems.map(x => ITEMS.find(i => i.id === x)).filter(Boolean);
     if (path) await uploadPhoto(path, pendingBlob);
     const { data, error } = await sb.from("looks").insert({
       id, name: $("l-name").value.trim(), style: $("l-style").value, status: path ? "Fotografiert" : "Idee",
@@ -473,30 +883,39 @@ async function createLook() {
 /* ---------- Klicks ---------- */
 document.addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
-  if (b.dataset.close !== undefined) return closePanel();
-  if (b.dataset.pick) return; // im Look-Formular separat behandelt
-  if (b.dataset.cat) { cat = b.dataset.cat; renderCats(); renderGrid(); return; }
-  if (b.dataset.edit) return showItem(b.dataset.edit, true);
-  if (b.dataset.view) return showItem(b.dataset.view, false);
-  if (b.dataset.save) return saveEdit(b.dataset.save, b);
-  if (b.dataset.del) return deleteItem(b.dataset.del, b);
-  if (b.dataset.dellook) return deleteLook(b.dataset.dellook, b);
-  if (b.dataset.item) return showItem(b.dataset.item, false);
-  if (b.dataset.look) return showLook(b.dataset.look);
+  const d = b.dataset;
+  if (d.close !== undefined) return closePanel();
+  if (d.pick) return; // im Look-Formular separat behandelt
+  if (d.cat) { cat = d.cat; renderCats(); renderGrid(); return; }
+  if (d.act) return runAct(d.act, b);
+  if (d.edit) return showItem(d.edit, true);
+  if (d.view) return showItem(d.view);
+  if (d.save) return saveEdit(d.save, b);
+  if (d.del) return deleteItem(d.del, b);
+  if (d.dellook) return deleteLook(d.dellook, b);
+  if (d.payout) return payout(d.payout, b);
+  if (d.oedit) return ownerForm(ownerOf(d.oedit));
+  if (d.odel) return deleteOwner(d.odel, b);
+  if (d.owner) return showOwner(d.owner);
+  if (d.item) return showItem(d.item);
+  if (d.look) return showLook(d.look);
   switch (b.id) {
     case "tab-items": return setTab("items");
     case "tab-looks": return setTab("looks");
+    case "tab-owners": return setTab("owners");
     case "addBtn": return showAdd();
     case "addLookBtn": return showAddLook();
+    case "addOwnerBtn": return ownerForm();
     case "logoutBtn": return sb.auth.signOut();
     case "reloadBtn": return reload(true);
   }
 });
 $("q").addEventListener("input", renderGrid);
+$("fstat").addEventListener("change", renderGrid);
 
-/* Beim Zurückkehren zur App (z.B. Handy entsperrt) neue Daten holen, damit PC und Handy gleich sind */
+/* Beim Zurückkehren zur App neue Daten holen, damit PC und Handy gleich sind */
 async function reload(manual) {
-  try { URLS = {}; await load(); renderAll(); if (manual) toast("Aktualisiert"); }
+  try { URLS = {}; await load(); renderAll(); if (manual) toast("Aktualisiert"); if (!ov.hidden && panelState && (panelState.type === "item" || panelState.type === "owner")) refreshPanel(); }
   catch (err) { toast(nice(err), 4000); }
 }
 document.addEventListener("visibilitychange", () => {

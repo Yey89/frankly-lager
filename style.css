@@ -147,3 +147,41 @@ img{max-width:100%}
 .ph .nofoto{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .rowsmall{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .rowsmall .btn{padding:6px 10px;font-size:13px}
+
+/* ---------- Version 2: Owner, Phasen, Verkauf ---------- */
+.fstat{flex:0 1 200px}
+.tab{margin-right:22px}
+.pill.muted{border-color:var(--line);color:var(--muted)}
+.flag{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--red-ink);background:var(--red);padding:2px 6px}
+.ph.dim img{opacity:.55;filter:grayscale(.6)}
+.ogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.ocard{background:var(--surface);border:1px solid var(--line);padding:14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;min-width:0}
+.ocard:hover{border-color:var(--ink)}
+.otop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.oid{font-family:var(--mono);font-size:12px;font-weight:600}
+.oname{font-family:var(--display);font-weight:700;font-size:20px;line-height:1.15}
+.ostats{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.ostats b{color:var(--ink);font-variant-numeric:tabular-nums}
+.ostats .warn,.ostats .warn b{color:var(--red)}
+.ostats.lg{font-size:14px;margin:6px 0 14px}
+.statusrow{display:flex;align-items:center;gap:12px;margin:2px 0 4px}
+.statusrow .price{font-size:15px}
+.box{border:1px solid var(--line);background:var(--surface);padding:12px 14px;margin-top:14px}
+.box.alert{border-color:var(--red)}
+.pline{margin:0;line-height:1.45}
+.actform{display:grid;gap:10px}
+.actform label{display:grid;gap:4px;font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.actform input,.actform select{font-family:var(--body);font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink);border:1px solid var(--line);background:var(--bg);padding:8px 10px;width:100%}
+.f.compact dt,.f.compact dd{padding:6px 0}
+.rlist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rlist li{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:14px;font-variant-numeric:tabular-nums}
+.linkbtn{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font:inherit;text-align:left}
+.linkbtn:hover{color:var(--red)}
+.tablewrap{overflow-x:auto;margin:4px 0 6px}
+.tbl{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+.tbl th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;font-weight:500;padding:6px 10px 6px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:7px 10px 7px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl td:nth-child(n+3){white-space:nowrap}
+.form label.check,label.check{display:flex;gap:10px;align-items:flex-start;text-transform:none;letter-spacing:0;font-family:var(--body);font-size:14px;color:var(--ink)}
+label.check input{width:auto;margin-top:3px}
+.box + dl.f,.box + .row{margin-top:14px}
