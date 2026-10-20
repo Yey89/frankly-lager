@@ -11,8 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="shop.css">
+<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="shop.css?v=13">
 <style>
 .fpage{max-width:560px;padding-block:20px 40px;display:grid;gap:16px}
 .fpick{border:2px dashed var(--ink);background:var(--surface);aspect-ratio:3/4;max-height:56vh;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden;position:relative}
@@ -61,7 +61,7 @@
     <h1 class="vtitle" style="margin:0">Danke!</h1>
     <p class="lead">Dein Foto ist bei uns. Zeig diesen Code an der Kasse:</p>
     <div class="code" id="fCode"></div>
-    <p class="hint">CHF 5 auf alle Teile mit dem Etikett «Frankly-Teil», einen Workshop, den Basteltisch oder die Tauschparty. Ein Gutschein pro Besuch, nicht bar auszahlbar. Mach am besten einen Screenshot.</p>
+    <p class="hint">CHF 5 auf alle Teile mit dem Etikett «Frankly-Teil». Ein Gutschein pro Besuch, nicht bar auszahlbar. Mach am besten einen Screenshot.</p>
     <button class="btn" type="button" id="fAgain">Noch ein Foto senden</button>
   </div>
 </main>
@@ -70,7 +70,7 @@
 <script>
   if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
 </script>
-<script src="config.js"></script>
-<script src="foto.js"></script>
+<script src="config.js?v=13"></script>
+<script src="foto.js?v=13"></script>
 </body>
 </html>

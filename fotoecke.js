@@ -68,7 +68,7 @@ async function saveTeile(id, btn) {
   FOTOS = FOTOS.map(f => f.id === id ? data : f); renderFotoecke();
   toast(unknown.length ? `Gespeichert. Unbekannte Nummer: ${unknown.join(", ")}` : "Teile gespeichert", 4000);
 }
-const GUTSCHEIN_GILT = "auf alle Teile mit dem Etikett «Frankly-Teil», einen Workshop, den Basteltisch oder die Tauschparty";
+const GUTSCHEIN_GILT = "auf alle Teile mit dem Etikett «Frankly-Teil»";
 async function sendGsMail(id) {
   const f = FOTOS.find(x => x.id === id); if (!f || !f.email) return;
   const hi = f.name ? `Hallo ${f.name}` : "Hallo";
