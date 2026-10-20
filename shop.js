@@ -83,11 +83,14 @@ function renderInfo() {
 
 /* ---------- Daten laden ---------- */
 async function load() {
-  const [a, b, c] = await Promise.all([
-    sb.from("items").select("id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad,stufe,fotos_extra").in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false }),
+  const F = "id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad,stufe,fotos_extra";
+  const itemsQ = f => sb.from("items").select(f).in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false });
+  let [a, b, c] = await Promise.all([
+    itemsQ(F + ",cut_pfad"),
     sb.from("owners").select("id,profilname,stil,instagram"),
     sb.from("looks").select("id,nr,nr_num,name,style,konzept,foto_pfad,look_items(item_id,position)").order("nr_num", { ascending: false })
   ]);
+  if (a.error && /cut_pfad/.test(a.error.message || "")) a = await itemsQ(F); // falls 14_outfit.sql noch fehlt
   if (a.error) throw a.error;
   ITEMS = a.data || [];
   OWNERS = b.error ? [] : (b.data || []);
@@ -117,6 +120,7 @@ async function loadImages() {
   const ok = await signPaths(paths.map(p => "thumbs/" + p));
   const missing = paths.filter(p => !ok.has("thumbs/" + p));
   if (missing.length) await signPaths(missing);
+  const cuts = ITEMS.map(i => i.cut_pfad).filter(Boolean); if (cuts.length) await signPaths(cuts);
   const sp = STREET.map(f => f.pfad).filter(Boolean);
   for (let i = 0; i < sp.length; i += 100) {
     const r = await sb.storage.from("fotoecke").createSignedUrls(sp.slice(i, i + 100), 60 * 60 * 6);
@@ -237,11 +241,12 @@ function showStreet(id) {
       </div>
     </div>`);
 }
-function collage(l) {
-  if (l.foto_pfad) return imgTag(l.foto_pfad, l.name);
-  const ps = l.items.map(id => ITEMS.find(x => x.id === id)).filter(Boolean).slice(0, 4);
-  return `<span class="collage n${ps.length}">${ps.map(it => imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="" loading="lazy">` : `<span class="nofoto">${esc(it.nr)}</span>`).join("")}</span>`;
-}
+/* Outfit-Bild (outfit.js): Teile wie ein Outfit angeordnet */
+const OF = window.FRANKLY_OUTFIT, COMBO = {};
+function lookItems(l) { return l.items.map(id => ITEMS.find(x => x.id === id)).filter(Boolean); }
+function lookCombo(l) { const its = lookItems(l), c = (COMBO[l.id] || []).map(id => its.find(x => x.id === id)).filter(Boolean); return c.length ? c : OF.first(its); }
+function outfitUrl(it) { return it.cut_pfad && URLS[it.cut_pfad] ? { src: URLS[it.cut_pfad], cut: true } : { src: imgUrl(it.foto_pfad), cut: false }; }
+function collage(l) { return OF.html(lookCombo(l), outfitUrl, l.name); }
 function renderLooks() {
   const own = LOOKS.length ? `<h3 class="osec">Looks von Frankly</h3><div class="looks">` + LOOKS.map(l => `
     <div class="look">
@@ -349,7 +354,8 @@ function showLook(id) {
   openPanel(`
     <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
-      <div class="big">${collage(l)}</div>
+      <div><div class="big">${collage(l)}</div>
+        ${OF.count(lookItems(l)) > 1 ? `<div class="okombi"><button class="btn" type="button" data-roll="${esc(l.id)}">Neu kombinieren</button><span class="hint">Andere Kombi aus diesen Teilen</span></div>` : ""}</div>
       <div>
         <div class="style">${esc(l.style || "")}</div>
         <h2 class="dt" style="margin-top:4px">${esc(l.name)}</h2>
@@ -475,6 +481,7 @@ document.addEventListener("click", e => {
   if (d.szshow !== undefined) { SHOWALL = !SHOWALL; return renderGrid(); }
   if (d.item) return showItem(d.item);
   if (d.look) return showLook(d.look);
+  if (d.roll) { const l = LOOKS.find(x => x.id === d.roll); if (l) { COMBO[l.id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id); showLook(l.id); renderLooks(); } return; }
   if (d.street) return showStreet(d.street);
   if (d.owner) return showOwner(d.owner);
   if (d.jkat) { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); return; }

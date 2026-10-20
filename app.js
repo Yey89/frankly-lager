@@ -65,11 +65,18 @@ function sizePreview(txt, kat) {
   if (!s.length) return "Im Shop: Grösse nicht erkannt, wird allen gezeigt. Tipp: z.B. M, 38 oder W28";
   return "Im Shop als: " + s.join(" / ");
 }
-function collage(l, big) {
-  if (l.foto_pfad) return imgTag(l.foto_pfad, l.name, big);
-  const ps = l.items.map(id => ITEMS.find(x => x.id === id)).filter(Boolean).slice(0, 4);
-  if (!ps.length) return `<span class="nofoto">Noch keine Teile</span>`;
-  return `<span class="collage n${ps.length}">${ps.map(it => imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : `<span class="nofoto">${esc(it.nr)}</span>`).join("")}</span>`;
+/* Outfit-Bild: Teile wie ein Outfit angeordnet (outfit.js). COMBO merkt sich die gewürfelte Kombi pro Look */
+const OF = window.FRANKLY_OUTFIT, COMBO = {}, SLOT_TXT = { top: "Oberteil", bottom: "Unterteil", dress: "Kleid", outer: "Jacke", shoes: "Schuhe", bag: "Tasche", acc: "Accessoire" };
+function lookItems(l) { return l.items.map(id => ITEMS.find(x => x.id === id)).filter(Boolean); }
+function lookCombo(l) {
+  const its = lookItems(l), ids = COMBO[l.id];
+  const c = ids ? ids.map(id => its.find(x => x.id === id)).filter(Boolean) : [];
+  return c.length ? c : OF.first(its);
+}
+function outfitUrl(it) { return it.cut_pfad && URLS[it.cut_pfad] ? { src: URLS[it.cut_pfad], cut: true } : { src: imgUrl(it.foto_pfad), cut: false }; }
+function collage(l) {
+  if (!l.items.length) return `<span class="nofoto">Noch keine Teile</span>`;
+  return OF.html(lookCombo(l), outfitUrl, l.name);
 }
 /* Looks im Teil: anzeigen, hinzufügen, entfernen */
 function lookBlock(it) {
@@ -271,7 +278,7 @@ async function load() {
   RENTALS = d.data || [];
   const allPaths = ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad), ITEMS.flatMap(i => extraFotos(i).map(f => f.pfad))).filter(Boolean);
   await signUrls(allPaths.map(p => "thumbs/" + p));
-  await signUrls(allPaths);
+  await signUrls(allPaths.concat(ITEMS.map(i => i.cut_pfad)));
   const an = await sb.from("anmeldungen").select("*").order("created_at", { ascending: false });
   ANM = an.error ? [] : (an.data || []);
   const af = await sb.from("anfragen").select("*").order("created_at", { ascending: false });
@@ -419,7 +426,7 @@ function renderAll() {
   renderCats(); renderGrid(); renderLooks(); renderOwners(); renderAnm();
   if (window.renderInsights && !$("viewInsights").hidden) renderInsights();
   const mt = missingThumbs().length;
-  $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "");
+  $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "") + (missingCuts().length ? ` · <button class="btn" type="button" id="cutBtn">${missingCuts().length} Teile in Looks freistellen</button>` : "");
 }
 function setTab(t) {
   ["items", "looks", "owners", "anm", "insights", "fotoecke"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
@@ -1199,21 +1206,93 @@ function showLook(id) {
   openPanel(`
     <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
-      <div class="big">${collage(l, true)}</div>
+      <div><div class="big" id="lookBig">${collage(l)}</div>
+        <div class="okombi">${OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-lookroll="${esc(l.id)}">Neu kombinieren</button><span class="hint">${OF.count(lookItems(l))} Kombis möglich</span>` : ""}
+        <button class="btn" type="button" data-lookasnew="${esc(l.id)}" ${lookCombo(l).length === l.items.length ? "hidden" : ""}>Diese Kombi als neuen Look speichern</button></div>
+        ${(() => { const n = lookItems(l).filter(it => it.foto_pfad && !it.cut_pfad).length; return n ? `<div class="okombi"><button class="btn primary" type="button" data-lookcut="${esc(l.id)}">${n} ${n === 1 ? "Teil" : "Teile"} freistellen</button><span class="hint">Hintergrund automatisch entfernen. Beim ersten Mal lädt das Programm etwa 1 Minute.</span></div>` : ""; })()}
+      </div>
       <div>
         <div class="nr"><small>Look</small>${esc(l.nr)}</div>
         <div class="two" style="margin-top:12px"><label>Name<input class="search" id="lk-name" value="${esc(l.name)}"></label>
         <label>Stil-Energie<select class="search" id="lk-style"><option value="">–</option>${STYLES.map(st => `<option ${st === l.style ? "selected" : ""}>${st}</option>`).join("")}</select></label></div>
         <div class="rowsmall"><button class="btn" type="button" data-looksave="${esc(l.id)}">Speichern</button></div>
         <div class="sec">Teile in diesem Look · ${l.items.length}</div>
-        <div class="thumbs">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? `<span class="kombi"><button class="mini" type="button" data-item="${esc(it.id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)} ${esc(it.titel)}</button><button class="btn ghost" type="button" data-lookout="${esc(it.id)}" aria-label="Aus Look entfernen">✕</button></span>` : ""; }).join("")}</div>
+        <div class="thumbs">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? `<span class="kombi"><button class="mini" type="button" data-item="${esc(it.id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)} ${esc(it.titel)} · ${SLOT_TXT[OF.slot(it)]}</button><button class="btn ghost" type="button" data-lookout="${esc(it.id)}" aria-label="Aus Look entfernen">✕</button></span>` : ""; }).join("")}</div>
         <div class="kombiadd"><input class="search" id="lookQ" type="search" placeholder="Teil hinzufügen: Nummer, Titel, Farbe …" aria-label="Teil für diesen Look suchen"><div class="thumbs" id="lookHits"></div></div>
         <div class="row"><button class="btn danger" type="button" data-dellook="${esc(l.id)}">Look löschen</button></div>
-        <p class="hint">Beim Löschen eines Looks bleiben die Teile erhalten. Im Shop erscheinen Looks mit mindestens 2 Teilen, die gerade im Laden sind.</p>
+        <p class="hint">Die Rolle (Oberteil, Unterteil, Jacke …) kommt von der Kategorie des Teils. Stimmt sie nicht, ändere die Kategorie beim Teil. Beim Löschen eines Looks bleiben die Teile erhalten.</p>
       </div>
     </div>`, { type: "look", id });
   const q = $("lookQ"); if (q) q.addEventListener("input", () => lookSearch(l));
 }
+function rollLook(id) {
+  const l = LOOKS.find(x => x.id === id); if (!l) return;
+  COMBO[id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id);
+  showLook(id); renderLooks();
+}
+async function comboAsNew(id, btn) {
+  const l = LOOKS.find(x => x.id === id); if (!l) return;
+  const c = lookCombo(l);
+  busy(btn, true, "…");
+  const ins = await sb.from("looks").insert({ name: c.map(x => x.titel).join(" + ").slice(0, 120) || "Look", style: l.style || null, status: "Aktiv" }).select().single();
+  if (ins.error) { busy(btn, false); return toast(nice(ins.error), 4500); }
+  const rows = c.map((x, i) => ({ look_id: ins.data.id, item_id: x.id, position: i + 1 }));
+  const r = await sb.from("look_items").insert(rows);
+  if (r.error) { busy(btn, false); return toast(nice(r.error), 4500); }
+  LOOKS = [Object.assign({}, ins.data, { items: c.map(x => x.id) })].concat(LOOKS);
+  renderAll(); showLook(ins.data.id); toast(`${ins.data.nr} gespeichert`);
+}
+/* Freistellen: Hintergrund im Browser entfernen (kostenlos, @imgly/background-removal, AGPL) */
+let BGRM = null;
+async function bgLib() {
+  if (!BGRM) { const m = await import("https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm"); BGRM = m.removeBackground || m.default; }
+  return BGRM;
+}
+/* leeren, durchsichtigen Rand abschneiden, damit das Teil seinen Platz füllt */
+function trimAlpha(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob), img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const x = c.getContext("2d"); x.drawImage(img, 0, 0); URL.revokeObjectURL(url);
+      const d = x.getImageData(0, 0, c.width, c.height).data;
+      let t = c.height, b = -1, l = c.width, r = -1;
+      for (let y = 0; y < c.height; y++) for (let q = 0; q < c.width; q++) if (d[(y * c.width + q) * 4 + 3] > 24) { if (y < t) t = y; if (y > b) b = y; if (q < l) l = q; if (q > r) r = q; }
+      if (b < 0) return resolve(blob);
+      const o = document.createElement("canvas"); o.width = r - l + 1; o.height = b - t + 1;
+      o.getContext("2d").drawImage(c, l, t, o.width, o.height, 0, 0, o.width, o.height);
+      o.toBlob(z => z ? resolve(z) : reject(new Error("Freistellen fehlgeschlagen")), "image/webp", 0.86);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Bild nicht lesbar")); };
+    img.src = url;
+  });
+}
+async function cutItem(it) {
+  if (!URLS[it.foto_pfad]) await signUrls([it.foto_pfad]);
+  const r = await fetch(URLS[it.foto_pfad]); if (!r.ok) throw new Error("Foto nicht gefunden");
+  const small = await resizeImage(await r.blob(), 1000, 0.92);
+  const rm = await bgLib();
+  const out = await trimAlpha(await rm(small, { output: { format: "image/png" } }));
+  const path = `cut/${it.id}.webp`;
+  const up = await sb.storage.from(BUCKET).upload(path, out, { contentType: "image/webp", upsert: true });
+  if (up.error) throw up.error;
+  const { data, error } = await sb.from("items").update({ cut_pfad: path }).eq("id", it.id).select().single();
+  if (error) throw error;
+  URLS[path] = URL.createObjectURL(out);
+  ITEMS = ITEMS.map(x => x.id === it.id ? data : x);
+}
+async function cutMany(list, btn, after) {
+  if (!list.length) return;
+  busy(btn, true, "Programm lädt …");
+  let done = 0, failed = 0, lastErr = "";
+  for (const it of list) {
+    try { await cutItem(it); done++; } catch (e) { failed++; lastErr = nice(e); }
+    btn.textContent = `Freistellen ${done + failed} von ${list.length} …`;
+  }
+  busy(btn, false); renderAll(); if (after) after();
+  toast(failed ? `${done} freigestellt, ${failed} fehlgeschlagen: ${lastErr}` : `${done} ${done === 1 ? "Teil" : "Teile"} freigestellt`, 6000);
+}
+function missingCuts() { const inLook = new Set(LOOKS.flatMap(l => l.items)); return ITEMS.filter(it => inLook.has(it.id) && it.foto_pfad && !it.cut_pfad); }
 async function deleteLook(id, btn) {
   if (!confirmTap(btn, "dellook" + id, "Wirklich löschen? Nochmals tippen")) return;
   const l = LOOKS.find(x => x.id === id);
@@ -1416,6 +1495,9 @@ document.addEventListener("click", e => {
   if (d.lookput && panelState) { const lid = panelState.id; addToLook(d.lookput, lid, null, b).then(() => showLook(lid)); return; }
   if (d.lookout && panelState) { const lid = panelState.id; removeFromLook(lid, d.lookout).then(() => { if (LOOKS.some(x => x.id === lid)) showLook(lid); else closePanel(); }); return; }
   if (d.looksave) return saveLookMeta(d.looksave, b);
+  if (d.lookroll) return rollLook(d.lookroll);
+  if (d.lookasnew) return comboAsNew(d.lookasnew, b);
+  if (d.lookcut) { const l = LOOKS.find(x => x.id === d.lookcut); if (l) cutMany(lookItems(l).filter(it => it.foto_pfad && !it.cut_pfad), b, () => showLook(l.id)); return; }
   if (d.xdel !== undefined && panelState) return delExtraFoto(panelState.id, Number(d.xdel), b);
   if (d.kombidel) return kombiDel(d.kombidel);
   if (d.oedit) return ownerForm(ownerOf(d.oedit));
@@ -1436,6 +1518,7 @@ document.addEventListener("click", e => {
     case "logoutBtn": return sb.auth.signOut();
     case "reloadBtn": return reload(true);
     case "thumbBtn": return makeThumbs(b);
+    case "cutBtn": return cutMany(missingCuts(), b);
   }
 });
 $("q").addEventListener("input", renderGrid);
