@@ -10,7 +10,7 @@ const SHOP = {
   ort: "Josy · Zentrum für Kreislaufwirtschaft",
   strasse: "Neue Hard 10",
   plz: "8005 Zürich",
-  zeiten: [["Mi – Fr", "13.00 – 19.00 Uhr"], ["Sa", "10.30 – 16.00 Uhr"], ["So – Di", "geschlossen"]],
+  zeiten: [["Mi – Fr", "13.00 – 19.00 Uhr"], ["Sa", "9.30 – 17.00 Uhr"], ["So – Di", "geschlossen"]],
   maps: "https://www.google.com/maps/search/?api=1&query=Neue+Hard+10+8005+Z%C3%BCrich"
 };
 /* Stil-Kacheln fürs Anmeldeformular. Eigene Fotos: Datei in den Ordner "stile/" legen. */
@@ -50,6 +50,8 @@ function rentText(it) { const r = RENT[it.id]; return r && r.bis ? `Vermietet bi
 function badge(it) {
   if (it.status === "Reserviert") return `<span class="pill">Reserviert</span>`;
   if (it.status === "Vermietet") return `<span class="pill muted">${esc(rentText(it))}</span>`;
+  if (it.stufe === "Lager") return `<span class="pill">Auf Anfrage</span>`;
+  if (it.stufe === "Reduziert") return `<span class="pill sold">Reduziert</span>`;
   return "";
 }
 
@@ -73,7 +75,7 @@ function renderInfo() {
 /* ---------- Daten laden ---------- */
 async function load() {
   const [a, b, c] = await Promise.all([
-    sb.from("items").select("id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad").in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false }),
+    sb.from("items").select("id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad,stufe").in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false }),
     sb.from("owners").select("id,profilname,stil,instagram"),
     sb.from("looks").select("id,nr,nr_num,name,style,konzept,foto_pfad,look_items(item_id,position)").order("nr_num", { ascending: false })
   ]);
@@ -163,6 +165,7 @@ function showItem(nr) {
         <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}</div>
         ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? `Dieses Teil ist bis ${esc(shortDate(RENT[it.id].bis))} vermietet und danach wieder im Laden.` : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
         ${it.status === "Reserviert" ? `<p class="hint">Dieses Teil ist für jemanden reserviert.</p>` : ""}
+        ${it.stufe === "Lager" && it.status === "Verfügbar" ? anfrageBox(it) : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
         ${ls.length ? `<div class="sec">Steckt in diesen Looks</div><div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.style || "")} · ${esc(l.name)}</button>`).join("")}</div>` : ""}
@@ -171,6 +174,31 @@ function showItem(nr) {
       </div>
     </div>`);
 }
+/* Teile im Lager: Anprobe anfragen */
+function anfrageBox(it) {
+  return `<div class="box"><span class="klabel">Auf Anfrage</span>
+    <p class="pline">Dieses Teil hängt gerade nicht im Laden, sondern im Lager. Schreib uns, dann legen wir es für deinen Besuch bereit.</p>
+    <form class="form anfform" id="anfForm" data-anf="${esc(it.id)}" novalidate>
+      <label>Dein Name *<input id="a-name" autocomplete="name" maxlength="120"></label>
+      <label>E-Mail oder Telefon *<input id="a-kontakt" autocomplete="email" maxlength="160"></label>
+      <label>Wann kommst du vorbei? (freiwillig)<input id="a-msg" maxlength="500" placeholder="z.B. Samstag Vormittag"></label>
+      <label class="hp" aria-hidden="true">Website<input id="a-website" tabindex="-1" autocomplete="off"></label>
+      <p class="err" id="a-err" aria-live="polite"></p>
+      <button class="btn primary" type="submit" id="a-btn">Anprobe anfragen</button>
+    </form>
+    <p class="lead" id="a-done" hidden>Danke! Wir melden uns bei dir.</p></div>`;
+}
+async function sendAnfrage(form) {
+  const err = $("a-err"), btn = $("a-btn"); err.textContent = "";
+  if ($("a-website").value) return;
+  const name = $("a-name").value.trim(), kontakt = $("a-kontakt").value.trim(), msg = $("a-msg").value.trim();
+  if (!name || kontakt.length < 3) { err.textContent = "Bitte Name und E-Mail oder Telefon angeben."; return; }
+  btn.disabled = true; btn.textContent = "Wird gesendet …";
+  const { error } = await sb.from("anfragen").insert({ item_id: form.dataset.anf, name, kontakt, nachricht: msg || null });
+  if (error) { btn.disabled = false; btn.textContent = "Anprobe anfragen"; err.textContent = /fetch|network/i.test(error.message) ? "Keine Verbindung. Bitte nochmals versuchen." : "Das hat nicht geklappt. Bitte komm direkt im Laden vorbei."; return; }
+  form.hidden = true; $("a-done").hidden = false;
+}
+document.addEventListener("submit", e => { const f = e.target.closest("#anfForm"); if (f) { e.preventDefault(); sendAnfrage(f); } });
 function showOwner(id) {
   const o = ownerOf(id); if (!o) return;
   const its = ITEMS.filter(i => i.owner_id === id);

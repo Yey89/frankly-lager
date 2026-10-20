@@ -8,7 +8,10 @@
 const CFG = window.FRANKLY_CONFIG;
 const BUCKET = CFG.bucket || "fotos";
 const SELF = "OWN-001"; // Frankly / eigene Teile: keine Provision, keine Abrechnung
-const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet", "Zurückgegeben"];
+const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet", "Zurückgegeben", "Gespendet"];
+const CLOSED = ["Verkauft", "Zurückgegeben", "Gespendet"];
+const STUFEN = ["Stange", "Reduziert", "Upcycling", "Lager"];
+const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Monat 2 · Upcycling-Stange", Lager: "Monat 3 · Lager, auf Anfrage" };
 const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
 const STYLES = ["EDGY", "FIERCE", "DREAMY", "AGILE"];
 const BASE_CATS = ["Oberteile", "Hosen", "Röcke", "Kleider", "Jacken", "Schuhe", "Taschen", "Accessoires"];
@@ -22,7 +25,7 @@ const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 const $ = id => document.getElementById(id);
 let sb = null;
-let ITEMS = [], LOOKS = [], OWNERS = [], RENTALS = [], ANM = [], URLS = {};
+let ITEMS = [], LOOKS = [], OWNERS = [], RENTALS = [], ANM = [], ANFRAGEN = [], URLS = {};
 let cat = "Alle", lastAdded = null, started = false, lastLoad = 0, lastOwner = SELF;
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -33,7 +36,7 @@ function priceTxt(p) { return (p === null || p === undefined || p === "") ? "Pre
 function round2(n) { return Math.round(n * 100) / 100; }
 function share(betrag, prov) { return round2(Number(betrag) * (100 - Number(prov || 0)) / 100); }
 function pill(st) {
-  const c = st === "Verkauft" || st === "Vermietet" ? "sold" : (st === "Verfügbar" ? "ok" : (st === "Zurückgegeben" ? "muted" : ""));
+  const c = st === "Verkauft" || st === "Vermietet" ? "sold" : (st === "Verfügbar" ? "ok" : (st === "Zurückgegeben" || st === "Gespendet" ? "muted" : ""));
   return `<span class="pill ${c}">${esc(st || "Entwurf")}</span>`;
 }
 function parsePrice(v) { v = String(v == null ? "" : v).trim(); if (!v) return null; const n = Number(v.replace(",", ".").replace(/[^\d.]/g, "")); return isNaN(n) ? null : n; }
@@ -76,13 +79,20 @@ function fmt(d) { if (typeof d === "string") d = parseD(d); return d ? `${WD[d.g
 function monthLabel(s) { const d = parseD(s); return d ? `${MONTHS[d.getMonth()]} ${d.getFullYear()}` : "Keine Phase"; }
 function monthStart(d) { return iso(new Date(d.getFullYear(), d.getMonth(), 1)); }
 function defaultPhase() { const t = today(); return t <= lastSat(t.getFullYear(), t.getMonth()) ? monthStart(t) : monthStart(new Date(t.getFullYear(), t.getMonth() + 1, 1)); }
-function nextPhase(s) { const base = parseD(s); const t = today(); let d = base && base > t ? base : t; d = new Date(d.getFullYear(), d.getMonth() + 1, 1); return iso(d); }
+function nextPhase(s) {
+  const t = today(), base = parseD(s) || t;
+  let d = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+  const cur = new Date(t.getFullYear(), t.getMonth(), 1);
+  if (d < cur) d = cur;
+  if (t > lastSat(d.getFullYear(), d.getMonth())) d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return iso(d);
+}
 function payoutDate(s) { const d = parseD(s) || today(); const ls = lastSat(d.getFullYear(), d.getMonth()); return d <= ls ? ls : lastSat(d.getFullYear(), d.getMonth() + 1); }
 function nextSaturdays(n) { const out = []; const d = today(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); for (let i = 0; i < n; i++) { out.push(new Date(d)); d.setDate(d.getDate() + 7); } return out; }
 function phaseInfo(it) {
   if (!it.phase_monat) return null;
   const m = parseD(it.phase_monat), start = firstSat(m.getFullYear(), m.getMonth()), end = lastSat(m.getFullYear(), m.getMonth()), t = today();
-  if (it.status === "Verkauft" || it.status === "Zurückgegeben") return { start, end, state: "done" };
+  if (CLOSED.includes(it.status)) return { start, end, state: "done" };
   if (it.entscheid) return { start, end, state: "decided" };
   if (t < start) return { start, end, state: "upcoming" };
   if (t <= end) return { start, end, state: "running", days: Math.round((end - t) / 864e5) };
@@ -190,6 +200,8 @@ async function load() {
   await signUrls(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)));
   const an = await sb.from("anmeldungen").select("*").order("created_at", { ascending: false });
   ANM = an.error ? [] : (an.data || []);
+  const af = await sb.from("anfragen").select("*").order("created_at", { ascending: false });
+  ANFRAGEN = af.error ? [] : (af.data || []);
   const ap = [...new Set(ANM.flatMap(a => a.vermieten_fotos || []))].filter(p => !URLS["anm:" + p]);
   for (let i = 0; i < ap.length; i += 100) {
     const r = await sb.storage.from("anmeldungen").createSignedUrls(ap.slice(i, i + 100), 60 * 60 * 12);
@@ -238,6 +250,8 @@ function matchesStatus(it, f) {
   if (!f || f === "alle") return true;
   if (f === "laden") return IN_SHOP.includes(it.status);
   if (f === "faellig") { const p = phaseInfo(it); return p && p.state === "due"; }
+  if (f === "anfrage") return openAnfragen(it.id).length > 0;
+  if (f.startsWith("stufe:")) return it.stufe === f.slice(6) && !CLOSED.includes(it.status);
   return it.status === f;
 }
 function renderCats() {
@@ -246,16 +260,18 @@ function renderCats() {
   $("cats").innerHTML = cs.map(c => `<button class="chip" type="button" aria-pressed="${c === cat}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
   const due = ITEMS.filter(i => { const p = phaseInfo(i); return p && p.state === "due"; }).length;
   const o = $("fstat").querySelector('option[value="faellig"]'); if (o) o.textContent = `Entscheid fällig (${due})`;
+  const oa = $("fstat").querySelector('option[value="anfrage"]'); if (oa) oa.textContent = `Anfrage offen (${ANFRAGEN.filter(a => !a.erledigt).length})`;
 }
 function itemCard(it) {
   const p = phaseInfo(it);
-  const flag = p && p.state === "due" ? `<span class="flag">Entscheid fällig</span>` : "";
+  const flag = (p && p.state === "due" ? `<span class="flag">Entscheid fällig</span>` : "") + (openAnfragen(it.id).length ? `<span class="flag">Anfrage</span>` : "");
+  const st = it.stufe && it.stufe !== "Stange" && !CLOSED.includes(it.status) ? `<span class="pill">${esc(it.stufe)}</span>` : "";
   const own = it.owner_id && it.owner_id !== SELF ? `<span>· ${esc(ownerName(it.owner_id))}</span>` : "";
   return `
     <button class="card" type="button" data-item="${esc(it.id)}">
-      <div class="ph ${it.status === "Verkauft" || it.status === "Zurückgegeben" ? "dim" : ""}">${imgTag(it.foto_pfad, it.titel)}<span class="tag ${it.id === lastAdded ? "new" : ""}">${esc(it.nr)}</span></div>
+      <div class="ph ${CLOSED.includes(it.status) ? "dim" : ""}">${imgTag(it.foto_pfad, it.titel)}<span class="tag ${it.id === lastAdded ? "new" : ""}">${esc(it.nr)}</span></div>
       <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price ${it.preis == null ? "open" : ""}">${esc(priceTxt(it.preis))}</span></div>
-      <div class="line2">${pill(it.status)}${flag}<span>${esc(it.unterkategorie || it.kategorie || "")}</span>${own}</div>
+      <div class="line2">${pill(it.status)}${st}${flag}<span>${esc(it.unterkategorie || it.kategorie || "")}</span>${own}</div>
     </button>`;
 }
 function renderGrid() {
@@ -338,27 +354,39 @@ function statusActions(it) {
   }
   if (s === "Vermietet") out.push(`<button class="btn primary" type="button" data-act="returned">Zurück erhalten</button>`);
   if (s === "Verkauft" && !it.ausbezahlt_am) out.push(`<button class="btn danger" type="button" data-act="unsell">Verkauf rückgängig</button>`);
-  if (s === "Zurückgegeben") out.push(`<button class="btn" type="button" data-act="setstatus" data-v="Verfügbar">Wieder im Laden</button>`);
+  if (s === "Zurückgegeben" || s === "Gespendet") out.push(`<button class="btn" type="button" data-act="setstatus" data-v="Verfügbar">Wieder im Laden</button>`);
   return out.join("");
 }
+function openAnfragen(id) { return ANFRAGEN.filter(a => a.item_id === id && !a.erledigt); }
 function phaseBlock(it) {
   const p = phaseInfo(it);
   if (!p) return "";
+  const stufe = it.stufe || "Stange", stTxt = STUFE_TXT[stufe] || stufe;
   let line = "", acts = "";
   const range = `${fmt(p.start)} – ${fmt(p.end)}`;
-  if (p.state === "upcoming") line = `Phase ${monthLabel(it.phase_monat)} startet am ${fmt(p.start)}.`;
-  if (p.state === "running") line = `Phase ${monthLabel(it.phase_monat)} läuft bis ${fmt(p.end)} · noch ${p.days} ${p.days === 1 ? "Tag" : "Tage"}.`;
-  if (p.state === "done") line = `Phase ${monthLabel(it.phase_monat)} (${range}) abgeschlossen.`;
-  if (p.state === "due") line = `<b class="warn">Entscheid fällig.</b> Phase ${monthLabel(it.phase_monat)} ist am ${fmt(p.end)} zu Ende gegangen.`;
+  if (p.state === "upcoming") line = `${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} startet am ${fmt(p.start)}.`;
+  if (p.state === "running") line = `${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} läuft bis ${fmt(p.end)} · noch ${p.days} ${p.days === 1 ? "Tag" : "Tage"}.`;
+  if (p.state === "done") line = `${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} (${range}) abgeschlossen.`;
+  if (p.state === "due") line = `<b class="warn">Entscheid fällig.</b> ${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} ist am ${fmt(p.end)} zu Ende gegangen. Die Owner kann auch selbst online entscheiden.`;
   if (p.state === "decided") {
     const d = it.entscheid_datum ? ` am ${fmt(it.entscheid_datum)}` : "";
-    line = `Entscheid: <b>${esc(it.entscheid)}</b>${d}.${it.entscheid_notiz ? " " + esc(it.entscheid_notiz) : ""}`;
-    acts = `<button class="btn primary" type="button" data-act="done">${it.entscheid === "Zurücknehmen" ? "Abgeholt" : "Erledigt"}</button><button class="btn" type="button" data-act="undecide">Entscheid ändern</button>`;
+    const von = it.entscheid_von === "Owner" ? ` <span class="hint">(online von der Owner)</span>` : "";
+    line = `Entscheid: <b>${esc(it.entscheid)}</b>${d}.${it.entscheid_notiz ? " " + esc(it.entscheid_notiz) + "." : ""}${von}`;
+    const doneTxt = { "Zurücknehmen": "Abgeholt", "Upcycling": "Upcycling fertig", "Spenden": "Gespendet" }[it.entscheid] || "Erledigt";
+    acts = `<button class="btn primary" type="button" data-act="done">${doneTxt}</button><button class="btn" type="button" data-act="undecide">Entscheid ändern</button>`;
   }
   if (p.state === "due" || p.state === "running") {
-    acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Upcycling …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
+    if (stufe === "Stange") acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Upcycling …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
+    else if (stufe === "Lager") acts = `<button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
+    else acts = `<button class="btn" type="button" data-act="tolager">Ins Lager</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
   }
-  return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Phase</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
+    return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Runde</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
+}
+function anfrageBlock(it) {
+  const as = ANFRAGEN.filter(a => a.item_id === it.id);
+  if (!as.length) return "";
+  return `<div class="box ${as.some(a => !a.erledigt) ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Anfragen</div>
+    <ul class="rlist">${as.map(a => `<li><span>${esc(String(a.created_at).slice(0, 10).split("-").reverse().join("."))}</span><span><b>${esc(a.name)}</b> · ${esc(a.kontakt)}${a.nachricht ? `<br><span class="hint">${esc(a.nachricht)}</span>` : ""}</span><span>${a.erledigt ? `<span class="hint">erledigt</span>` : `<button class="btn" type="button" data-anfdone="${esc(a.id)}">Erledigt</button>`}</span></li>`).join("")}</ul></div>`;
 }
 function saleBlock(it) {
   if (it.status !== "Verkauft") return "";
@@ -401,12 +429,14 @@ function showItem(id, editing) {
         <div class="statusrow">${pill(it.status)}<span class="price">${esc(priceTxt(it.preis))}</span></div>
         <div class="rowsmall">${statusActions(it)}</div>
         <div id="act"></div>
+        ${anfrageBlock(it)}
         ${phaseBlock(it)}
         ${saleBlock(it)}
         ${rentalBlock(it)}
         <dl class="f">
           <dt>Owner</dt><dd><button class="linkbtn" type="button" data-owner="${esc(it.owner_id)}">${esc(ownerName(it.owner_id))} · ${esc(it.owner_id)}</button></dd>
-          <dt>Phase</dt><dd>${esc(monthLabel(it.phase_monat))}</dd>
+          <dt>Runde</dt><dd>${esc(monthLabel(it.phase_monat))}</dd>
+          <dt>Stufe</dt><dd>${esc(STUFE_TXT[it.stufe || "Stange"] || it.stufe)}</dd>
           ${FIELDS.map(([k, l]) => `<dt>${l}</dt><dd>${v(k)}</dd>`).join("")}
         </dl>
         <div class="row">
@@ -440,7 +470,8 @@ function showItemEdit(id) {
         <label class="sec" for="e-notiz">Beschreibung</label><textarea id="e-notiz" class="search" style="width:100%" rows="3">${esc(it.notiz || "")}</textarea>
         <dl class="f">
           <dt>Owner</dt><dd><select id="e-owner_id">${ownerOptions(it.owner_id)}</select></dd>
-          <dt>Phase</dt><dd><select id="e-phase_monat">${phaseOptions(it.phase_monat)}</select></dd>
+          <dt>Runde</dt><dd><select id="e-phase_monat">${phaseOptions(it.phase_monat)}</select></dd>
+          <dt>Stufe</dt><dd><select id="e-stufe">${STUFEN.map(x => `<option value="${x}" ${x === (it.stufe || "Stange") ? "selected" : ""}>${esc(STUFE_TXT[x])}</option>`).join("")}</select></dd>
           <dt>Status</dt><dd><select id="e-status">${STATUSES.map(s => `<option ${s === (it.status || "Entwurf") ? "selected" : ""}>${s}</option>`).join("")}</select></dd>
           ${FIELDS.map(([k, l]) => `<dt>${l}</dt><dd>${inp(k)}</dd>`).join("")}
         </dl>
@@ -458,7 +489,7 @@ async function patchItem(id, patch, msg) {
 }
 async function saveEdit(id, btn) {
   const patch = {};
-  ["titel", "notiz", "owner_id", "phase_monat", "status"].concat(FIELDS.map(f => f[0])).forEach(k => {
+  ["titel", "notiz", "owner_id", "phase_monat", "stufe", "status"].concat(FIELDS.map(f => f[0])).forEach(k => {
     const el = $("e-" + k); if (!el) return;
     let v = el.value.trim();
     if (k === "preis") v = parsePrice(v); else if (v === "") v = null;
@@ -466,6 +497,7 @@ async function saveEdit(id, btn) {
   });
   if (!patch.titel) { toast("Der Titel darf nicht leer sein."); return; }
   if (!patch.owner_id) patch.owner_id = SELF;
+  if (!patch.stufe) patch.stufe = "Stange";
   const old = ITEMS.find(x => x.id === id) || {};
   if (patch.status === "Verkauft" && old.status !== "Verkauft") {
     patch.verkauf_preis = old.verkauf_preis != null ? old.verkauf_preis : patch.preis;
@@ -558,26 +590,29 @@ function openAction(kind, it) {
   if (kind === "lower") {
     actForm(`<div class="sec" style="margin:0">Preis senken</div>
       <div class="two"><label>Neuer Preis CHF<input id="a-preis" inputmode="decimal" placeholder="${esc(it.preis ?? "")}"></label>
-      <label>Nächste Phase<select id="a-phase">${phaseOptions(nextPhase(it.phase_monat))}</select></label></div>
-      <p class="hint">Bisher ${esc(priceTxt(it.preis))}. Das Teil bleibt im Laden und startet in die nächste Phase.</p>
+      <label>Nächste Runde<select id="a-phase">${phaseOptions(nextPhase(it.phase_monat))}</select></label></div>
+      <p class="hint">Bisher ${esc(priceTxt(it.preis))}. Das Teil kommt an die Reduziert-Stange und startet in die nächste Runde.</p>
       <div class="rowsmall"><button class="btn primary" type="submit">Preis senken</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const p = parsePrice($("a-preis").value);
       if (p == null) return toast("Bitte den neuen Preis eingeben.");
       if (it.preis != null && p >= Number(it.preis)) return toast("Der neue Preis muss tiefer sein als der bisherige.");
       const btn = e.submitter; busy(btn, true);
-      const ok = await patchItem(it.id, { preis: p, phase_monat: $("a-phase").value || null, entscheid: null, entscheid_datum: null, entscheid_notiz: null, status: it.status === "Entwurf" ? "Entwurf" : "Verfügbar" }, `Neuer Preis ${chf(p)}`);
+      const ok = await patchItem(it.id, { preis: p, stufe: "Reduziert", phase_monat: $("a-phase").value || null, entscheid: null, entscheid_datum: null, entscheid_notiz: null, entscheid_von: "Team", status: it.status === "Entwurf" ? "Entwurf" : "Verfügbar" }, `Neuer Preis ${chf(p)} · Reduziert-Stange`);
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
   if (kind === "upcycle") {
-    actForm(`<div class="sec" style="margin:0">Upcycling-Termin</div>
-      <div class="two"><label>Datum<input id="a-datum" type="date" value="${iso(nextSaturdays(1)[0])}"></label><label>Notiz (Uhrzeit, Idee)<input id="a-notiz" placeholder="z.B. 14 Uhr"></label></div>
+    actForm(`<div class="sec" style="margin:0">Upcycling</div>
+      <div class="two"><label>Wer<select id="a-wer"><option>Selbst upcyceln</option><option>Upcycling-Team im Josy</option></select></label><label>Termin<input id="a-datum" type="date" value="${iso(nextSaturdays(1)[0])}"></label></div>
+      <label>Notiz (Uhrzeit, Idee)<input id="a-notiz" placeholder="z.B. 14 Uhr"></label>
+      <p class="hint">Wenn das Upcycling fertig ist, auf «Upcycling fertig» tippen. Dann hängt das Teil einen Monat an der Upcycling-Stange.</p>
       <div class="rowsmall"><button class="btn primary" type="submit">Termin speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
-      e.preventDefault(); if (!$("a-datum").value) return toast("Bitte ein Datum wählen.");
+      e.preventDefault(); if ($("a-wer").value === "Selbst upcyceln" && !$("a-datum").value) return toast("Bitte ein Datum wählen.");
       const btn = e.submitter; busy(btn, true);
-      const ok = await patchItem(it.id, { entscheid: "Upcycling", entscheid_datum: $("a-datum").value, entscheid_notiz: val("a-notiz") }, "Upcycling-Termin gespeichert");
+      const wer = $("a-wer").value, notiz = [wer, val("a-notiz")].filter(Boolean).join(" · ");
+      const ok = await patchItem(it.id, { entscheid: "Upcycling", entscheid_datum: $("a-datum").value || null, entscheid_notiz: notiz, entscheid_von: "Team" }, "Upcycling gespeichert");
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
@@ -587,7 +622,7 @@ function openAction(kind, it) {
       <div class="rowsmall"><button class="btn primary" type="submit">Abholung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const btn = e.submitter; busy(btn, true);
-      const ok = await patchItem(it.id, { entscheid: "Zurücknehmen", entscheid_datum: $("a-datum").value }, "Abholung gespeichert");
+      const ok = await patchItem(it.id, { entscheid: "Zurücknehmen", entscheid_datum: $("a-datum").value, entscheid_von: "Team" }, "Abholung gespeichert");
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
@@ -613,10 +648,22 @@ async function runAct(kind, btn) {
     busy(btn, true);
     const ok = await patchItem(id, { status: "Verfügbar", verkauf_preis: null, verkauf_datum: null, verkauf_provision: null, ausbezahlt_am: null }, "Verkauf rückgängig gemacht"); if (ok) showItem(id); else busy(btn, false); return;
   }
-  if (kind === "undecide") { busy(btn, true); const ok = await patchItem(id, { entscheid: null, entscheid_datum: null, entscheid_notiz: null }, "Entscheid zurückgesetzt"); if (ok) showItem(id); else busy(btn, false); return; }
+  if (kind === "undecide") { busy(btn, true); const ok = await patchItem(id, { entscheid: null, entscheid_datum: null, entscheid_notiz: null, entscheid_von: null }, "Entscheid zurückgesetzt"); if (ok) showItem(id); else busy(btn, false); return; }
+  if (kind === "tolager") {
+    busy(btn, true);
+    const ok = await patchItem(id, { stufe: "Lager", phase_monat: nextPhase(it.phase_monat), entscheid: null, entscheid_datum: null, entscheid_notiz: null, entscheid_von: "Team" }, `${it.nr} ist im Lager · online «Auf Anfrage»`); if (ok) showItem(id); else busy(btn, false); return;
+  }
+  if (kind === "donate") {
+    if (!confirmTap(btn, "donate" + id, "Wirklich spenden? Nochmals tippen")) return;
+    busy(btn, true);
+    const ok = await patchItem(id, { entscheid: "Spenden", entscheid_datum: null, entscheid_notiz: null, entscheid_von: "Team" }, "Wird gespendet"); if (ok) showItem(id); else busy(btn, false); return;
+  }
   if (kind === "done") {
     busy(btn, true);
-    const ok = await patchItem(id, { status: "Zurückgegeben" }, it.entscheid === "Zurücknehmen" ? `${it.nr} abgeholt` : `${it.nr} erledigt`); if (ok) showItem(id); else busy(btn, false); return;
+    let patch = { status: "Zurückgegeben" }, msg = `${it.nr} abgeholt`;
+    if (it.entscheid === "Upcycling") { patch = { stufe: "Upcycling", phase_monat: nextPhase(it.phase_monat), entscheid: null, entscheid_datum: null, entscheid_notiz: null, status: "Verfügbar" }; msg = `${it.nr} hängt jetzt an der Upcycling-Stange. Preis bei Bedarf unter «Bearbeiten» anpassen.`; }
+    if (it.entscheid === "Spenden") { patch = { status: "Gespendet" }; msg = `${it.nr} gespendet`; }
+    const ok = await patchItem(id, patch, msg); if (ok) showItem(id); else busy(btn, false); return;
   }
 }
 
@@ -692,6 +739,7 @@ function showOwner(oid) {
       ${postTable(posts, ["datum", "teil", "art", "betrag", "anteil", "frankly", "status"])}
       ${s.open > 0 ? `<div class="rowsmall"><button class="btn primary" type="button" data-payout="${esc(oid)}">${esc(chf(s.open))} als ausbezahlt markieren</button></div>` : ""}
     </div>`}
+    ${self ? "" : linkBox(o)}
     <dl class="f">
       ${self ? "" : `<dt>Aufteilung</dt><dd>${esc(splitLabel(o))}</dd>`}
       <dt>Voller Name</dt><dd>${esc(o.voller_name || "–")}</dd>
@@ -706,6 +754,35 @@ function showOwner(oid) {
     <div class="sec">Teile von ${esc(o.profilname)}</div>
     ${its.length ? `<div class="grid">${its.map(itemCard).join("")}</div>` : `<p class="hint">Noch keine Teile.</p>`}
   `, { type: "owner", id: oid });
+}
+/* Persönlicher Link für den Owner-Bereich (owner.html) */
+function ownerLink(o) { return o && o.zugang_token ? new URL("owner.html?k=" + o.zugang_token, location.href).toString() : ""; }
+function linkBox(o) {
+  const url = ownerLink(o);
+  if (!url) return `<div class="box"><div class="sec" style="margin:0 0 6px">Mein Frankly</div><p class="hint">Für den persönlichen Link bitte zuerst 06_owner_bereich.sql in Supabase ausführen.</p></div>`;
+  return `<div class="box"><div class="sec" style="margin:0 0 6px">Mein Frankly · persönlicher Link</div>
+    <p class="hint">Mit diesem Link sieht ${esc(o.profilname)} ihre Teile, ihr Guthaben und entscheidet nach jeder Runde selbst. Kein Passwort nötig, darum nur ihr schicken.</p>
+    <input class="search linkfield" id="olink" readonly value="${esc(url)}" aria-label="Persönlicher Link">
+    <div class="rowsmall"><button class="btn primary" type="button" data-olink="${esc(o.id)}">Link kopieren</button><button class="btn" type="button" data-omail="${esc(o.id)}">Per E-Mail senden</button><button class="btn ghost" type="button" data-otoken="${esc(o.id)}">Neuen Link erstellen</button></div></div>`;
+}
+function ownerMail(o) {
+  if (!o.email) return toast("Für diese Person ist keine E-Mail gespeichert. Link kopieren und z.B. per WhatsApp schicken.", 5000);
+  const name = (o.voller_name || o.profilname || "").split(" ")[0];
+  mailTo(o.email, "Dein persönlicher Link: Mein Frankly", `Hallo ${name}\n\nhier ist dein persönlicher Link zu «Mein Frankly»:\n${ownerLink(o)}\n\nDort siehst du jederzeit, wie es deinen Teilen geht, was du verdient hast und wann ausbezahlt wird. Nach jeder Runde kannst du dort selbst entscheiden, wie es weitergeht.\n\nBitte gib den Link nicht weiter, er ist nur für dich.` + GRUSS);
+}
+async function newToken(oid, btn) {
+  if (!confirmTap(btn, "tok" + oid, "Alter Link funktioniert dann nicht mehr. Nochmals tippen")) return;
+  busy(btn, true, "Wird erstellt …");
+  const { data, error } = await sb.from("owners").update({ zugang_token: uuid() }).eq("id", oid).select().single();
+  busy(btn, false);
+  if (error) return toast(nice(error), 4500);
+  OWNERS = OWNERS.map(x => x.id === oid ? data : x); showOwner(oid); toast("Neuer Link erstellt. Der alte gilt nicht mehr.");
+}
+async function anfrageDone(id, btn) {
+  busy(btn, true);
+  const { data, error } = await sb.from("anfragen").update({ erledigt: true }).eq("id", id).select().single();
+  if (error) { busy(btn, false); return toast(nice(error), 4500); }
+  ANFRAGEN = ANFRAGEN.map(a => a.id === id ? data : a); renderAll(); refreshPanel(); toast("Anfrage erledigt");
 }
 function ownerForm(o) {
   o = o || {};
@@ -1133,6 +1210,10 @@ document.addEventListener("click", e => {
   if (d.anm) return showAnm(d.anm);
   if (d.aact) return anmAction(d.aact, b);
   if (d.payout) return payout(d.payout, b);
+  if (d.olink) { const el = $("olink"), txt = el ? el.value : ""; if (navigator.clipboard) navigator.clipboard.writeText(txt).then(() => toast("Link kopiert"), () => { el.select(); toast("Link markiert. Jetzt kopieren."); }); else { el.select(); toast("Link markiert. Jetzt kopieren."); } return; }
+  if (d.omail) return ownerMail(ownerOf(d.omail));
+  if (d.otoken) return newToken(d.otoken, b);
+  if (d.anfdone) return anfrageDone(d.anfdone, b);
   if (d.oedit) return ownerForm(ownerOf(d.oedit));
   if (d.odel) return deleteOwner(d.odel, b);
   if (d.owner) return showOwner(d.owner);
