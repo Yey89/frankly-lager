@@ -55,6 +55,10 @@ function uuid() {
 function shortDate(s) { if (!s) return ""; const [y, m, d] = String(s).slice(0, 10).split("-"); return `${d}.${m}.`; }
 function rentText(it) { const r = RENT[it.id]; return r && r.bis ? `Vermietet bis ${shortDate(r.bis)}` : "Gerade vermietet"; }
 function franklyPill(it) { return it.owner_id === "OWN-001" ? `<span class="pill fpill">Frankly-Teil</span>` : ""; }
+function resText(iso) {
+  const d = new Date(iso), wt = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][d.getDay()];
+  return `${wt} ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}., ${d.getHours()}${d.getMinutes() ? "." + String(d.getMinutes()).padStart(2, "0") : ""} Uhr`;
+}
 function badge(it) {
   if (it.status === "Reserviert") return `<span class="pill">Reserviert</span>`;
   if (it.status === "Vermietet") return `<span class="pill muted">${esc(rentText(it))}</span>`;
@@ -85,14 +89,16 @@ function renderInfo() {
 async function load() {
   const F = "id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad,stufe,fotos_extra";
   const itemsQ = f => sb.from("items").select(f).in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false });
+  sb.rpc("frankly_res_aufraeumen").then(() => {}, () => {}); // abgelaufene Reservationen freigeben (falls 16_reservieren.sql fehlt: egal)
   let [a, b, c] = await Promise.all([
-    itemsQ(F + ",cut_pfad"),
+    itemsQ(F + ",cut_pfad,reserviert_bis"),
     sb.from("owners").select("id,profilname,stil,instagram"),
     sb.from("looks").select("id,nr,nr_num,name,style,konzept,foto_pfad,look_items(item_id,position)").order("nr_num", { ascending: false })
   ]);
+  if (a.error && /reserviert_bis/.test(a.error.message || "")) a = await itemsQ(F + ",cut_pfad"); // falls 16_reservieren.sql noch fehlt
   if (a.error && /cut_pfad/.test(a.error.message || "")) a = await itemsQ(F); // falls 14_outfit.sql noch fehlt
   if (a.error) throw a.error;
-  ITEMS = a.data || [];
+  ITEMS = (a.data || []).map(i => i.status === "Reserviert" && i.reserviert_bis && new Date(i.reserviert_bis) < new Date() ? Object.assign({}, i, { status: "Verfügbar", reserviert_bis: null }) : i);
   OWNERS = b.error ? [] : (b.data || []);
   const ids = new Set(ITEMS.map(i => i.id));
   RENT = {};
@@ -300,7 +306,8 @@ function showItem(nr) {
         <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}${franklyPill(it)}</div>
         ${it.owner_id === "OWN-001" ? `<p class="hint">Frankly-Teil: Hier gilt dein Fotoecke-Gutschein.</p>` : ""}
         ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? `Dieses Teil ist bis ${esc(shortDate(RENT[it.id].bis))} vermietet und danach wieder im Laden.` : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
-        ${it.status === "Reserviert" ? `<p class="hint">Dieses Teil ist für jemanden reserviert.</p>` : ""}
+        ${it.status === "Reserviert" ? `<p class="hint">${it.reserviert_bis ? `Dieses Teil ist bis ${esc(resText(it.reserviert_bis))} reserviert. Danach ist es vielleicht wieder frei.` : "Dieses Teil ist für jemanden reserviert."}</p>` : ""}
+        ${it.status === "Verfügbar" && ["Stange", "Reduziert", "Upcycling"].includes(it.stufe || "Stange") ? resBox(it) : ""}
         ${(it.stufe === "Lager" || it.stufe === "Online") && it.status === "Verfügbar" ? anfrageBox(it) : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
@@ -319,6 +326,37 @@ function kombiSection(it) {
   const its = ids.map(id => ITEMS.find(x => x.id === id)).filter(Boolean);
   return its.length ? `<div class="sec">Kombiniere mit</div><div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${its.map(card).join("")}</div>` : "";
 }
+/* Teile im Laden: online reservieren (bis Ladenschluss des 2. Öffnungstags) */
+function resBox(it) {
+  return `<div class="box"><span class="klabel">Reservieren</span>
+    <p class="pline">Gefällt dir das Teil? Reserviere es und probier es im Laden an. Die Reservation gilt bis Ladenschluss des zweiten Öffnungstags.</p>
+    <button class="btn" type="button" id="resOpen">Jetzt reservieren</button>
+    <form class="form anfform" id="resForm" data-res="${esc(it.id)}" hidden novalidate>
+      <label>Dein Name *<input id="r-name" autocomplete="name" maxlength="120"></label>
+      <label>E-Mail oder Telefon *<input id="r-kontakt" autocomplete="email" maxlength="160"></label>
+      <label class="hp" aria-hidden="true">Website<input id="r-website" tabindex="-1" autocomplete="off"></label>
+      <p class="err" id="r-err" aria-live="polite"></p>
+      <button class="btn primary" type="submit" id="r-btn">Reservieren</button>
+    </form>
+    <p class="lead" id="r-done" hidden></p></div>`;
+}
+async function sendRes(form) {
+  const err = $("r-err"), btn = $("r-btn"); err.textContent = "";
+  if ($("r-website").value) return;
+  const name = $("r-name").value.trim(), kontakt = $("r-kontakt").value.trim();
+  if (!name || kontakt.length < 3) { err.textContent = "Bitte Name und E-Mail oder Telefon angeben."; return; }
+  btn.disabled = true; btn.textContent = "Wird reserviert …";
+  const { data, error } = await sb.rpc("frankly_reservieren", { p_item: form.dataset.res, p_name: name, p_kontakt: kontakt });
+  btn.disabled = false; btn.textContent = "Reservieren";
+  if (error) { err.textContent = /fetch|network/i.test(error.message) ? "Keine Verbindung. Bitte nochmals versuchen." : (error.message || "Das hat nicht geklappt."); return; }
+  const it = ITEMS.find(x => x.id === form.dataset.res);
+  if (it) { it.status = "Reserviert"; it.reserviert_bis = data; renderGrid && renderGrid(); }
+  form.hidden = true; $("resOpen").hidden = true;
+  const done = $("r-done"); done.hidden = false;
+  done.innerHTML = `Reserviert bis <b>${esc(resText(data))}</b>. Komm vorbei: ${esc(SHOP.strasse)}, ${esc(SHOP.plz)}. Sag an der Kasse deinen Namen und die Nummer <b>${esc(it ? it.nr : "")}</b>.`;
+}
+document.addEventListener("submit", e => { const f = e.target.closest("#resForm"); if (f) { e.preventDefault(); sendRes(f); } });
+document.addEventListener("click", e => { if (e.target.closest("#resOpen")) { $("resForm").hidden = false; e.target.closest("#resOpen").hidden = true; $("r-name").focus(); } });
 /* Teile im Lager oder auf der Online-Stange: anfragen */
 function anfrageBox(it) {
   const online = it.stufe === "Online";

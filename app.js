@@ -284,6 +284,7 @@ async function startApp() {
 
 /* ---------- Daten laden ---------- */
 async function load() {
+  await sb.rpc("frankly_res_aufraeumen").then(() => {}, () => {}); // abgelaufene Online-Reservationen freigeben
   const [a, b, c, d] = await Promise.all([
     sb.from("items").select("*").order("nr_num"),
     sb.from("looks").select("*, look_items(item_id, position)").order("nr_num"),
@@ -625,6 +626,7 @@ function showItem(id, editing) {
         <h2 class="dt">${esc(it.titel)}</h2>
         <p class="desc">${esc(it.notiz || "")}</p>
         <div class="statusrow">${pill(it.status)}<span class="price">${esc(priceTxt(it.preis))}</span></div>
+        ${it.status === "Reserviert" && it.reserviert_bis ? `<p class="hint">Online reserviert bis <b>${esc(new Date(it.reserviert_bis).toLocaleString("de-CH", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }))}</b>, danach automatisch wieder verfügbar. Wer reserviert hat, steht unten bei «Anfragen».</p>` : ""}
         <div class="rowsmall">${statusActions(it)}</div>
         <div id="act"></div>
         ${anfrageBlock(it)}
