@@ -109,3 +109,8 @@ Fotopfade im Bucket `fotos`:
 - «Neu kombinieren» würfelt eine andere Kombi aus den Teilen des Looks. Im Lager: «Diese Kombi als neuen Look speichern».
 - «Teile freistellen» entfernt den Hintergrund im Browser (gratis, @imgly/background-removal, AGPL). Gespeichert unter cut/<id>.webp.
 - SQL: supabase/14_outfit.sql
+
+## Update 13: Etiketten drucken
+- Lager → Teile → «Etiketten drucken»: Teile wählen, A4 mit 12 Hängeetiketten (5 × 9 cm), jedes mit eigenem QR-Code zu ?teil=FR-…
+- Schwarz-rot «Frankly-Teil» für OWN-001, weiss mit Owner-Profilname für alle anderen (Layout freigegeben 20.10.2026). etiketten.js; QR: qrcode-generator 1.4.4 (MIT, cdnjs).
+- Gutschein gilt nur noch auf «Frankly-Teile». Dateien mit ?v=… gegen alten Browser-Speicher.
