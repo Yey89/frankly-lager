@@ -18,8 +18,12 @@ const BASE_CATS = ["Oberteile", "Hosen", "Röcke", "Kleider", "Jacken", "Schuhe"
 const FIELDS = [
   ["kategorie", "Kategorie"], ["unterkategorie", "Unterkategorie"], ["schnitt", "Schnitt"], ["farben", "Farben"],
   ["muster", "Muster"], ["groesse", "Grösse"], ["marke", "Marke"], ["material", "Material"], ["zustand", "Zustand"],
-  ["preis", "Preis CHF"], ["standort", "Standort"]
+  ["preis", "Preis CHF"], ["standort", "Standort"], ["getragen", "Getragen (laut Owner)"], ["abgabe_grund", "Warum abgegeben"]
 ];
+const SELECT_FIELDS = {
+  getragen: ["Nie", "Selten", "Oft", "Jahrelang"],
+  abgabe_grund: ["Passt nicht mehr", "Passform stimmte nie", "Stil passt nicht mehr", "Nie getragen", "Zu viele ähnliche", "Abgenutzt", "Anderes"]
+};
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
@@ -355,11 +359,14 @@ function renderOwners() {
 }
 function renderAll() {
   renderCats(); renderGrid(); renderLooks(); renderOwners(); renderAnm();
+  if (window.renderInsights && !$("viewInsights").hidden) renderInsights();
   const mt = missingThumbs().length;
   $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "");
 }
 function setTab(t) {
-  ["items", "looks", "owners", "anm"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  ["items", "looks", "owners", "anm", "insights"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  $("viewInsights").hidden = t !== "insights";
+  if (t === "insights" && window.renderInsights) renderInsights();
   $("viewAnm").hidden = t !== "anm";
   $("viewItems").hidden = t !== "items";
   $("viewLooks").hidden = t !== "looks";
@@ -494,6 +501,7 @@ function showItemEdit(id) {
   const cats = [...new Set(BASE_CATS.concat(ITEMS.map(i => i.kategorie).filter(Boolean)))];
   const inp = k => {
     const x = it[k];
+    if (SELECT_FIELDS[k]) return `<select id="e-${k}"><option value="">–</option>${SELECT_FIELDS[k].map(o => `<option ${o === x ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
     if (k === "kategorie") return `<select id="e-${k}">${cats.map(c => `<option ${c === x ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
     return `<input id="e-${k}" value="${esc(x == null ? "" : x)}" ${k === "preis" ? 'inputmode="decimal"' : ""}>`;
   };
@@ -1141,6 +1149,10 @@ function showAdd() {
           <label>Grösse<input id="f-groesse" placeholder="z.B. M, 38 oder W28"><span class="hint" id="f-szprev"></span></label>
           <label>Marke<input id="f-marke" placeholder="optional"></label>
         </div>
+        <div class="two">
+          <label>Getragen (laut Owner)<select id="f-getragen"><option value="">–</option>${SELECT_FIELDS.getragen.map(o => `<option>${o}</option>`).join("")}</select></label>
+          <label>Warum abgegeben<select id="f-abgabe_grund"><option value="">–</option>${SELECT_FIELDS.abgabe_grund.map(o => `<option>${o}</option>`).join("")}</select></label>
+        </div>
         <label>Notiz<textarea id="f-notiz" rows="2" placeholder="Was fällt auf? Zustand, Details …"></textarea></label>
         <p class="hint" id="formMsg">Pflicht sind nur Foto und Titel. Alles andere kannst du später ergänzen.</p>
         <div class="row" style="margin-top:0"><button class="btn primary" id="saveNew" type="submit" disabled>Teil anlegen</button></div>
@@ -1170,7 +1182,8 @@ async function createItem() {
     await uploadPhoto(path, pendingBlob);
     const owner = $("f-owner").value || SELF;
     const row = { id, titel: val("f-titel"), kategorie: val("f-kategorie"), groesse: val("f-groesse"), marke: val("f-marke"),
-      preis: parsePrice($("f-preis").value), notiz: val("f-notiz"), foto_pfad: path, owner_id: owner, phase_monat: $("f-phase").value || null };
+      preis: parsePrice($("f-preis").value), notiz: val("f-notiz"), foto_pfad: path, owner_id: owner, phase_monat: $("f-phase").value || null,
+      getragen: val("f-getragen"), abgabe_grund: val("f-abgabe_grund") };
     const { data, error } = await sb.from("items").insert(row).select().single();
     if (error) { await sb.storage.from(BUCKET).remove([path]); throw error; }
     lastOwner = owner;
@@ -1270,6 +1283,7 @@ document.addEventListener("click", e => {
     case "tab-looks": return setTab("looks");
     case "tab-owners": return setTab("owners");
     case "tab-anm": return setTab("anm");
+    case "tab-insights": return setTab("insights");
     case "addBtn": return showAdd();
     case "addLookBtn": return showAddLook();
     case "addOwnerBtn": return ownerForm();
@@ -1284,7 +1298,7 @@ $("fanm").addEventListener("change", renderAnm);
 
 /* Beim Zurückkehren zur App neue Daten holen, damit PC und Handy gleich sind */
 async function reload(manual) {
-  try { URLS = {}; await load(); renderAll(); if (manual) toast("Aktualisiert"); if (!ov.hidden && panelState && ["item", "owner", "anm"].includes(panelState.type)) refreshPanel(); }
+  try { URLS = {}; if (typeof liebState !== "undefined") liebState = "idle"; await load(); renderAll(); if (manual) toast("Aktualisiert"); if (!ov.hidden && panelState && ["item", "owner", "anm"].includes(panelState.type)) refreshPanel(); }
   catch (err) { toast(nice(err), 4000); }
 }
 document.addEventListener("visibilitychange", () => {

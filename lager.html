@@ -54,6 +54,7 @@
     <button class="tab" role="tab" id="tab-looks" aria-selected="false" type="button">Looks <span class="n" id="cntLooks"></span></button>
     <button class="tab" role="tab" id="tab-owners" aria-selected="false" type="button">Owner <span class="n" id="cntOwners"></span></button>
     <button class="tab" role="tab" id="tab-anm" aria-selected="false" type="button">Anmeldungen <span class="n" id="cntAnm"></span></button>
+    <button class="tab" role="tab" id="tab-insights" aria-selected="false" type="button">Erkenntnisse</button>
   </nav>
 
   <section id="viewItems">
@@ -112,6 +113,11 @@
     <div class="alist" id="anmList"></div>
   </section>
 
+  <section id="viewInsights" hidden>
+    <p class="hint" style="max-width:70ch;margin-top:14px">Was verkauft sich, was bleibt liegen, was geben Owner ab und was tragen Frauen seit Jahren? Diese Seite rechnet alles automatisch aus deinen Daten. Grundlage für deine spätere Kollektion.</p>
+    <div id="insights"></div>
+  </section>
+
   <footer>
     <span id="foot">0–100 Frankly · Lager</span>
     <span class="headbtns"><a class="btn ghost" href="./" target="_blank" rel="noopener">Shop ansehen</a><button class="btn ghost" id="reloadBtn" type="button">Neu laden</button></span>
@@ -128,5 +134,6 @@
 <script src="config.js"></script>
 <script src="sizes.js"></script>
 <script src="app.js"></script>
+<script src="insights.js"></script>
 </body>
 </html>
