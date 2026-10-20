@@ -8,7 +8,7 @@
 "use strict";
 
 const GETRAGEN = ["Nie", "Selten", "Oft", "Jahrelang"];
-const ABGABE = ["Passt nicht mehr", "Passform stimmte nie", "Stil passt nicht mehr", "Nie getragen", "Zu viele ähnliche", "Abgenutzt", "Anderes"];
+const ABGABE = ["Passt nicht mehr", "Passform stimmte nie", "Stil passt nicht mehr", "Nie getragen", "Zu viele ähnliche", "Wusste nicht, wie kombinieren", "Abgenutzt", "Anderes"];
 const GRUENDE = ["Passform", "Qualität", "Bequem", "Vielseitig kombinierbar", "Zeitlose Farbe", "Fühle mich darin wie ich", "Erinnerung", "Pflegeleicht"];
 let LIEB = [], liebState = "idle", insightsDim = "kategorie";
 

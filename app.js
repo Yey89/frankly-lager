@@ -15,7 +15,7 @@ const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduzier
 const ONLINE_NOTIZ = "Online weiterverkaufen";
 const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
 const STYLES = ["EDGY", "FIERCE", "DREAMY", "AGILE"];
-const BASE_CATS = ["Oberteile", "Hosen", "Röcke", "Kleider", "Jacken", "Schuhe", "Taschen", "Accessoires"];
+const BASE_CATS = ["Oberteile", "Tuniken", "Hosen", "Röcke", "Kleider", "Jacken", "Kimonos", "Schuhe", "Taschen", "Accessoires"];
 const FIELDS = [
   ["kategorie", "Kategorie"], ["unterkategorie", "Unterkategorie"], ["schnitt", "Schnitt"], ["farben", "Farben"],
   ["muster", "Muster"], ["groesse", "Grösse"], ["marke", "Marke"], ["material", "Material"], ["zustand", "Zustand"],
@@ -23,7 +23,7 @@ const FIELDS = [
 ];
 const SELECT_FIELDS = {
   getragen: ["Nie", "Selten", "Oft", "Jahrelang"],
-  abgabe_grund: ["Passt nicht mehr", "Passform stimmte nie", "Stil passt nicht mehr", "Nie getragen", "Zu viele ähnliche", "Abgenutzt", "Anderes"]
+  abgabe_grund: ["Passt nicht mehr", "Passform stimmte nie", "Stil passt nicht mehr", "Nie getragen", "Zu viele ähnliche", "Wusste nicht, wie kombinieren", "Abgenutzt", "Anderes"]
 };
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];

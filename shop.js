@@ -20,7 +20,7 @@ const STILE = [
   { key: "DREAMY", img: "stile/dreamy.jpg", words: "weich, floral, verspielt, fliessend" },
   { key: "AGILE", img: "stile/agile.jpg", words: "sportlich, bequem, clean, Basics" }
 ];
-const CATS = ["Oberteile", "Hosen", "Röcke", "Kleider", "Jacken", "Schuhe", "Taschen", "Accessoires"];
+const CATS = ["Oberteile", "Tuniken", "Hosen", "Röcke", "Kleider", "Jacken", "Kimonos", "Schuhe", "Taschen", "Accessoires"];
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 

@@ -8,15 +8,15 @@
 "use strict";
 
 window.FRANKLY_OUTFIT = (() => {
-  const CAT = { Oberteile: "top", Hosen: "bottom", "Röcke": "bottom", Kleider: "dress", Jacken: "outer", Schuhe: "shoes", Taschen: "bag", Accessoires: "acc" };
+  const CAT = { Oberteile: "top", Hosen: "bottom", "Röcke": "bottom", Kleider: "dress", Jacken: "outer", Kimonos: "outer", Tuniken: "top", Schuhe: "shoes", Taschen: "bag", Accessoires: "acc" };
   const KW = [
     ["dress", /kleid|dress|jumpsuit|overall/i],
-    ["outer", /jacke|jacket|blazer|mantel|coat|weste|vest\b|parka|trench|cardigan|bomber/i],
+    ["outer", /kimono|jacke|jacket|blazer|mantel|coat|weste|vest\b|parka|trench|cardigan|bomber/i],
     ["shoes", /schuh|shoe|sneaker|boot|stiefel|sandal|heels?\b|pumps?\b|loafer/i],
     ["bag", /tasche|\bbag|clutch|beutel/i],
     ["acc", /gürtel|belt|schal|scarf|halstuch|\bhut\b|\bhat\b|mütze|\bcap\b|kette|schmuck|accessoir|brille/i],
     ["bottom", /hose|jeans|trouser|pants?\b|\brock\b|skirt|shorts|culotte|legging/i],
-    ["top", /shirt|bluse|blouse|\btop\b|pullover|pulli|sweat|hoodie|strick|knit|\btee\b|body|korsett|corset|bustier/i]
+    ["top", /tunika|tunic|shirt|bluse|blouse|\btop\b|pullover|pulli|sweat|hoodie|strick|knit|\btee\b|body|korsett|corset|bustier/i]
   ];
   /* Welche Rolle hat ein Teil im Outfit? Kategorie zuerst, bei «Oberteile» oder unklar auch der Titel */
   function slot(it) {

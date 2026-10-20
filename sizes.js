@@ -22,7 +22,7 @@
   const SHOES = ["35", "36", "37", "38", "39", "40", "41", "42", "43", "44"];
 
   function group(kat) {
-    if (["Oberteile", "Kleider", "Jacken"].includes(kat)) return "oben";
+    if (["Oberteile", "Tuniken", "Kleider", "Jacken", "Kimonos"].includes(kat)) return "oben";
     if (["Hosen", "Röcke"].includes(kat)) return "unten";
     if (kat === "Schuhe") return "schuhe";
     return "alle";
