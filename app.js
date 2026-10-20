@@ -1207,7 +1207,7 @@ function showLook(id) {
     <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
       <div><div class="big" id="lookBig">${collage(l)}</div>
-        <div class="okombi">${OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-lookroll="${esc(l.id)}">Neu kombinieren</button><span class="hint">${OF.count(lookItems(l))} Kombis möglich</span>` : ""}
+        <div class="okombi">${OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-lookroll="${esc(l.id)}">Neu kombinieren</button><span class="hint">${OF.count(lookItems(l))} Kombis möglich</span>` : `<span class="hint">«Neu kombinieren» erscheint, sobald der Look mehr Teile hat (z.B. 2 Oberteile oder eine Jacke).</span>`}
         <button class="btn" type="button" data-lookasnew="${esc(l.id)}" ${lookCombo(l).length === l.items.length ? "hidden" : ""}>Diese Kombi als neuen Look speichern</button></div>
         ${(() => { const n = lookItems(l).filter(it => it.foto_pfad && !it.cut_pfad).length; return n ? `<div class="okombi"><button class="btn primary" type="button" data-lookcut="${esc(l.id)}">${n} ${n === 1 ? "Teil" : "Teile"} freistellen</button><span class="hint">Hintergrund automatisch entfernen. Beim ersten Mal lädt das Programm etwa 1 Minute.</span></div>` : ""; })()}
       </div>

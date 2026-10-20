@@ -247,17 +247,26 @@ function lookItems(l) { return l.items.map(id => ITEMS.find(x => x.id === id)).f
 function lookCombo(l) { const its = lookItems(l), c = (COMBO[l.id] || []).map(id => its.find(x => x.id === id)).filter(Boolean); return c.length ? c : OF.first(its); }
 function outfitUrl(it) { return it.cut_pfad && URLS[it.cut_pfad] ? { src: URLS[it.cut_pfad], cut: true } : { src: imgUrl(it.foto_pfad), cut: false }; }
 function collage(l) { return OF.html(lookCombo(l), outfitUrl, l.name); }
-function renderLooks() {
-  const own = LOOKS.length ? `<h3 class="osec">Looks von Frankly</h3><div class="looks">` + LOOKS.map(l => `
+function lookCard(l, combo) {
+  return `
     <div class="look">
       <button class="card" type="button" data-look="${esc(l.id)}" style="gap:10px">
-        <div class="ph">${collage(l)}</div>
+        <div class="ph">${combo ? OF.html(combo, outfitUrl, l.name) : collage(l)}</div>
         <span class="style">${esc(l.style || "")}</span>
         <span class="lname">${esc(l.name)} · ${l.items.length} Teile</span>
       </button>
-    </div>`).join("") + `</div>` : "";
-  const street = STREET.length ? `<h3 class="osec">Aus der Fotoecke</h3><div class="looks">${STREET.map(streetCard).join("")}</div>` : "";
-  $("lookGrid").innerHTML = own || street ? own + street : `<p class="empty">Bald gibt es hier Looks zu sehen. Mach mit in der Fotoecke im Laden!</p>`;
+    </div>`;
+}
+/* Kombi, in der ein bestimmtes Teil vorkommt (für die Teil-Ansicht / QR-Code) */
+function comboWith(l, it) {
+  const its = lookItems(l); let c = lookCombo(l);
+  for (let i = 0; i < 40 && !c.some(x => x.id === it.id); i++) c = OF.shuffle(its, c);
+  return c.some(x => x.id === it.id) ? c : null;
+}
+function renderLooks() {
+  const own = `<h3 class="osec">Looks von Frankly</h3>` + (LOOKS.length ? `<div class="looks">${LOOKS.map(l => lookCard(l)).join("")}</div>` : `<p class="hint">Bald zeigen wir hier, wie du unsere Teile kombinieren kannst.</p>`);
+  const street = `<h3 class="osec">Aus der Fotoecke</h3>` + (STREET.length ? `<div class="looks">${STREET.map(streetCard).join("")}</div>` : `<p class="hint">Hier erscheinen bald Fotos von euch. Probier im Laden, mach dein Foto in der Fotoecke und teile es mit uns: Dafür gibt es einen Gutschein.</p>`);
+  $("lookGrid").innerHTML = own + street;
 }
 
 /* ---------- Panel ---------- */
@@ -295,9 +304,9 @@ function showItem(nr) {
         ${(it.stufe === "Lager" || it.stufe === "Online") && it.status === "Verfügbar" ? anfrageBox(it) : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
+        ${ls.length ? `<div class="sec">So kannst du es kombinieren</div><div class="looks">${ls.map(l => lookCard(l, comboWith(l, it))).join("")}</div>` : ""}
         ${kombiSection(it)}
         ${(() => { const fs = STREET.filter(f => streetItems(f).some(x => x.id === it.id)); return fs.length ? `<div class="sec">So wurde es getragen</div><div class="thumbs">${fs.map(f => `<button class="mini" type="button" data-street="${esc(f.id)}">${URLS["fe:" + f.pfad] ? `<img src="${esc(URLS["fe:" + f.pfad])}" alt="">` : ""}${esc(f.name || "Look")}</button>`).join("")}</div>` : ""; })()}
-        ${ls.length ? `<div class="sec">Steckt in diesen Looks</div><div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.name)}</button>`).join("")}</div>` : ""}
         ${visitBox()}
         <div class="rowsmall"><button class="btn" type="button" data-share="${esc(it.nr)}">Link kopieren</button></div>
       </div>
