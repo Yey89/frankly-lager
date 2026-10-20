@@ -55,6 +55,7 @@
     <button class="tab" role="tab" id="tab-owners" aria-selected="false" type="button">Owner <span class="n" id="cntOwners"></span></button>
     <button class="tab" role="tab" id="tab-anm" aria-selected="false" type="button">Anmeldungen <span class="n" id="cntAnm"></span></button>
     <button class="tab" role="tab" id="tab-insights" aria-selected="false" type="button">Erkenntnisse</button>
+    <button class="tab" role="tab" id="tab-fotoecke" aria-selected="false" type="button">Fotoecke <span class="n" id="cntFoto"></span></button>
   </nav>
 
   <section id="viewItems">
@@ -114,6 +115,14 @@
     <div class="alist" id="anmList"></div>
   </section>
 
+  <section id="viewFotoecke" hidden>
+    <div class="tools" style="justify-content:space-between">
+      <span class="hint" style="flex:1 1 280px;max-width:62ch">Fotos aus der Fotoecke (QR-Code am Stativ, Seite <b>foto.html</b>). Gib frei, was du zeigen willst. Öffentlich nur, wenn die Person zugestimmt hat.</span>
+      <span class="rowsmall" style="margin:0"><input class="search" id="gsCode" placeholder="Gutschein-Code, z.B. FOTO-7K3MZ" aria-label="Gutschein-Code"><button class="btn" type="button" id="gsBtn">Einlösen</button></span>
+    </div>
+    <div id="fotoecke"></div>
+  </section>
+
   <section id="viewInsights" hidden>
     <p class="hint" style="max-width:70ch;margin-top:14px">Was verkauft sich, was bleibt liegen, was geben Owner ab und was tragen Frauen seit Jahren? Diese Seite rechnet alles automatisch aus deinen Daten. Grundlage für deine spätere Kollektion.</p>
     <div id="insights"></div>
@@ -136,5 +145,6 @@
 <script src="sizes.js"></script>
 <script src="app.js"></script>
 <script src="insights.js"></script>
+<script src="fotoecke.js"></script>
 </body>
 </html>

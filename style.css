@@ -223,3 +223,14 @@ label.check input{width:auto;margin-top:3px}
 .kombi{display:inline-flex;align-items:center;gap:2px}
 .kombiadd{display:grid;gap:8px;margin-top:10px}
 .kombiadd .search{width:100%}
+
+/* Zusatzfotos + Fotoecke */
+.xfotos{display:flex;flex-wrap:wrap;gap:8px}
+.xfoto{margin:0;width:88px;display:grid;gap:4px}
+.xfoto img,.xfoto .nofoto{width:88px;aspect-ratio:3/4;object-fit:cover;display:block;border:1px solid var(--line);background:var(--bg)}
+.xfoto figcaption{font-family:var(--mono);font-size:11px;display:flex;justify-content:space-between;align-items:center}
+.xfoto .btn.ghost{padding:0 4px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.fcard{border:1px solid var(--line);background:var(--surface);display:grid;gap:8px;padding:10px;align-content:start}
+.fcard img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:var(--bg)}
+.fcard .pill{margin-right:4px}

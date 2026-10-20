@@ -214,7 +214,7 @@ async function load() {
   LOOKS = (b.data || []).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id) }));
   OWNERS = c.data || [];
   RENTALS = d.data || [];
-  const allPaths = ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)).filter(Boolean);
+  const allPaths = ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad), ITEMS.flatMap(i => extraFotos(i).map(f => f.pfad))).filter(Boolean);
   await signUrls(allPaths.map(p => "thumbs/" + p));
   await signUrls(allPaths);
   const an = await sb.from("anmeldungen").select("*").order("created_at", { ascending: false });
@@ -367,8 +367,10 @@ function renderAll() {
   $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "");
 }
 function setTab(t) {
-  ["items", "looks", "owners", "anm", "insights"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  ["items", "looks", "owners", "anm", "insights", "fotoecke"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
   $("viewInsights").hidden = t !== "insights";
+  $("viewFotoecke").hidden = t !== "fotoecke";
+  if (t === "fotoecke" && window.renderFotoecke) renderFotoecke(true);
   if (t === "insights" && window.renderInsights) renderInsights();
   $("viewAnm").hidden = t !== "anm";
   $("viewItems").hidden = t !== "items";
@@ -428,6 +430,37 @@ function phaseBlock(it) {
     else acts = `<button class="btn" type="button" data-act="tolager">Ins Lager</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
   }
     return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Runde</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
+}
+/* Zusatzfotos: Hinten, Etikett, Detail, Mangel */
+const FOTO_ARTEN = ["Hinten", "Etikett", "Detail", "Mangel"];
+function extraFotos(it) { return Array.isArray(it && it.fotos_extra) ? it.fotos_extra : []; }
+function extraBlock(it) {
+  const fs = extraFotos(it);
+  return `<div class="sec">Weitere Fotos <span class="hint">· max. 5, im Shop unter dem Hauptfoto</span></div>
+    ${fs.length ? `<div class="xfotos">${fs.map((f, i) => `<figure class="xfoto">${imgUrl(f.pfad) ? `<img src="${esc(imgUrl(f.pfad))}" alt="${esc(f.art)}">` : `<span class="nofoto">Foto</span>`}<figcaption>${esc(f.art)}<button class="btn ghost" type="button" data-xdel="${i}" aria-label="Foto entfernen">✕</button></figcaption></figure>`).join("")}</div>` : `<p class="hint">Noch keine. Tipp: Etikett und Mängel zeigen schafft Vertrauen.</p>`}
+    ${fs.length < 5 ? `<div class="rowsmall"><select class="search" id="xart" aria-label="Art des Fotos">${FOTO_ARTEN.map(a => `<option>${a}</option>`).join("")}</select><label class="btn" for="xfile">+ Foto hinzufügen</label><input id="xfile" type="file" accept="image/*" hidden></div>` : ""}`;
+}
+async function addExtraFoto(id, file) {
+  const it = ITEMS.find(x => x.id === id); if (!it) return;
+  toast("Foto wird hochgeladen …", 10000);
+  try {
+    const blob = await resizeImage(file);
+    const path = `items/${id}-${Date.now()}.jpg`;
+    await uploadPhoto(path, blob);
+    const list = extraFotos(it).concat({ pfad: path, art: $("xart").value });
+    const { data, error } = await sb.from("items").update({ fotos_extra: list }).eq("id", id).select().single();
+    if (error) { await sb.storage.from(BUCKET).remove([path, "thumbs/" + path]); throw error; }
+    ITEMS = ITEMS.map(x => x.id === id ? data : x); showItem(id); toast("Foto hinzugefügt");
+  } catch (err) { toast(/fotos_extra/.test(err.message || "") ? "Bitte zuerst 10_fotos_fotoecke.sql ausführen." : nice(err), 4500); }
+}
+async function delExtraFoto(id, idx, btn) {
+  const it = ITEMS.find(x => x.id === id); if (!it) return;
+  if (!confirmTap(btn, "xdel" + id + idx, "✕?")) return;
+  const f = extraFotos(it)[idx], list = extraFotos(it).filter((_, i) => i !== idx);
+  const { data, error } = await sb.from("items").update({ fotos_extra: list }).eq("id", id).select().single();
+  if (error) return toast(nice(error), 4500);
+  if (f) await removePhoto(f.pfad).catch(() => {});
+  ITEMS = ITEMS.map(x => x.id === id ? data : x); showItem(id);
 }
 function onlineBlock(it) {
   if (it.stufe !== "Online" || it.status !== "Verfügbar") return "";
@@ -501,9 +534,10 @@ function showItem(id, editing) {
       <div>
         <div class="big">${imgTag(it.foto_pfad, it.titel, true)}</div>
         <div class="rowsmall">
-          <label class="btn" for="rep-lib">Foto ersetzen</label>
+          <label class="btn" for="rep-lib">Hauptfoto ersetzen</label>
           <input id="rep-lib" type="file" accept="image/*" hidden>
         </div>
+        ${extraBlock(it)}
       </div>
       <div>
         <div class="nr"><small>Anzeigenummer</small>${esc(it.nr)}</div>
@@ -536,6 +570,7 @@ function showItem(id, editing) {
   const rep = $("rep-lib");
   rep.addEventListener("change", () => { if (rep.files[0]) replacePhoto(id, rep.files[0]); });
   const kq = $("kombiQ"); if (kq) kq.addEventListener("input", () => kombiSearch(it));
+  const xf = $("xfile"); if (xf) xf.addEventListener("change", () => { if (xf.files[0]) addExtraFoto(id, xf.files[0]); });
 }
 
 function showItemEdit(id) {
@@ -635,6 +670,7 @@ async function deleteItem(id, btn) {
   const { error } = await sb.from("items").delete().eq("id", id);
   if (error) { busy(btn, false); toast(nice(error), 4000); return; }
   await removePhoto(it && it.foto_pfad).catch(() => {});
+  for (const f of extraFotos(it)) await removePhoto(f.pfad).catch(() => {});
   ITEMS = ITEMS.filter(x => x.id !== id);
   RENTALS = RENTALS.filter(r => r.item_id !== id);
   LOOKS = LOOKS.map(l => Object.assign({}, l, { items: l.items.filter(x => x !== id) }));
@@ -1319,6 +1355,7 @@ document.addEventListener("click", e => {
   if (d.otoken) return newToken(d.otoken, b);
   if (d.anfdone) return anfrageDone(d.anfdone, b);
   if (d.kombiadd) return kombiAdd(d.kombiadd, b);
+  if (d.xdel !== undefined && panelState) return delExtraFoto(panelState.id, Number(d.xdel), b);
   if (d.kombidel) return kombiDel(d.kombidel);
   if (d.oedit) return ownerForm(ownerOf(d.oedit));
   if (d.odel) return deleteOwner(d.odel, b);
@@ -1331,6 +1368,7 @@ document.addEventListener("click", e => {
     case "tab-owners": return setTab("owners");
     case "tab-anm": return setTab("anm");
     case "tab-insights": return setTab("insights");
+    case "tab-fotoecke": return setTab("fotoecke");
     case "addBtn": return showAdd();
     case "addLookBtn": return showAddLook();
     case "addOwnerBtn": return ownerForm();

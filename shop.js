@@ -26,7 +26,7 @@ const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "A
 
 const CFG = window.FRANKLY_CONFIG;
 const $ = id => document.getElementById(id);
-let sb = null, ITEMS = [], OWNERS = [], LOOKS = [], RENT = {}, KOMBIS = [], URLS = {}, cat = "Alle";
+let sb = null, ITEMS = [], OWNERS = [], LOOKS = [], RENT = {}, KOMBIS = [], STREET = [], URLS = {}, cat = "Alle";
 const SZ = window.FRANKLY_SIZES;
 const SEL_KEY = "frankly-groessen";
 let SEL = loadSel(), TMP = null, SHOWALL = false;
@@ -54,6 +54,7 @@ function uuid() {
 }
 function shortDate(s) { if (!s) return ""; const [y, m, d] = String(s).slice(0, 10).split("-"); return `${d}.${m}.`; }
 function rentText(it) { const r = RENT[it.id]; return r && r.bis ? `Vermietet bis ${shortDate(r.bis)}` : "Gerade vermietet"; }
+function franklyPill(it) { return it.owner_id === "OWN-001" ? `<span class="pill fpill">Frankly-Teil</span>` : ""; }
 function badge(it) {
   if (it.status === "Reserviert") return `<span class="pill">Reserviert</span>`;
   if (it.status === "Vermietet") return `<span class="pill muted">${esc(rentText(it))}</span>`;
@@ -83,7 +84,7 @@ function renderInfo() {
 /* ---------- Daten laden ---------- */
 async function load() {
   const [a, b, c] = await Promise.all([
-    sb.from("items").select("id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad,stufe").in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false }),
+    sb.from("items").select("id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad,stufe,fotos_extra").in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false }),
     sb.from("owners").select("id,profilname,stil,instagram"),
     sb.from("looks").select("id,nr,nr_num,name,style,konzept,foto_pfad,look_items(item_id,position)").order("nr_num", { ascending: false })
   ]);
@@ -96,6 +97,8 @@ async function load() {
     const r = await sb.from("vermietungen").select("item_id,von,bis,zurueck_am").is("zurueck_am", null);
     (r.data || []).forEach(x => { const cur = RENT[x.item_id]; if (!cur || String(x.von) > String(cur.von)) RENT[x.item_id] = x; });
   }
+  const fe = await sb.from("fotoecke").select("id,created_at,pfad,teile,name,instagram").order("created_at", { ascending: false }).limit(60);
+  STREET = fe.error ? [] : (fe.data || []);
   const kb = await sb.from("kombis").select("item_a,item_b");
   KOMBIS = kb.error ? [] : (kb.data || []);
   LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length);
@@ -114,6 +117,34 @@ async function loadImages() {
   const ok = await signPaths(paths.map(p => "thumbs/" + p));
   const missing = paths.filter(p => !ok.has("thumbs/" + p));
   if (missing.length) await signPaths(missing);
+  const sp = STREET.map(f => f.pfad).filter(Boolean);
+  for (let i = 0; i < sp.length; i += 100) {
+    const r = await sb.storage.from("fotoecke").createSignedUrls(sp.slice(i, i + 100), 60 * 60 * 6);
+    (r.data || []).forEach(x => { if (x.signedUrl && x.path) URLS["fe:" + x.path] = x.signedUrl; });
+  }
+}
+/* Zusatzfotos (Hinten, Etikett, Detail, Mangel): erst beim Öffnen laden */
+function extras(it) { return Array.isArray(it.fotos_extra) ? it.fotos_extra : []; }
+function galleryHtml(it) {
+  const fs = extras(it); if (!fs.length) return "";
+  const main = { pfad: it.foto_pfad, art: "Vorne" };
+  return `<div class="gal" role="group" aria-label="Weitere Fotos">${[main].concat(fs).map((f, i) => `<button class="galb" type="button" data-gal="${esc(f.pfad)}" aria-pressed="${i === 0}"><span class="galimg" data-galimg="${esc(f.pfad)}">${URLS["thumbs/" + f.pfad] || URLS[f.pfad] ? `<img src="${esc(URLS["thumbs/" + f.pfad] || URLS[f.pfad])}" alt="">` : ""}</span><span>${esc(f.art)}</span></button>`).join("")}</div>`;
+}
+async function loadExtras(it) {
+  const fs = extras(it); if (!fs.length) return;
+  const need = fs.map(f => f.pfad).filter(p => !URLS["thumbs/" + p] && !URLS[p]);
+  if (need.length) {
+    const ok = await signPaths(need.map(p => "thumbs/" + p));
+    const miss = need.filter(p => !ok.has("thumbs/" + p)); if (miss.length) await signPaths(miss);
+  }
+  fs.forEach(f => { const el = panel.querySelector(`[data-galimg="${CSS.escape(f.pfad)}"]`); const u = URLS["thumbs/" + f.pfad] || URLS[f.pfad]; if (el && u && !el.firstChild) el.innerHTML = `<img src="${esc(u)}" alt="">`; });
+}
+async function showGal(p, btn) {
+  panel.querySelectorAll("[data-gal]").forEach(b => b.setAttribute("aria-pressed", b === btn));
+  const big = panel.querySelector(".big");
+  if (!URLS[p]) { const r = await sb.storage.from(CFG.bucket || "fotos").createSignedUrl(p, 60 * 60 * 6); if (r.data && r.data.signedUrl) URLS[p] = r.data.signedUrl; }
+  const u = URLS[p] || URLS["thumbs/" + p];
+  if (big && u) big.innerHTML = `<img src="${esc(u)}" alt="">`;
 }
 async function ensureBig(p) {
   if (!p || URLS[p]) return;
@@ -127,7 +158,7 @@ function card(it) {
     <button class="card" type="button" data-item="${esc(it.nr)}">
       <div class="ph">${imgTag(it.foto_pfad, it.titel)}<span class="tag">${esc(it.nr)}</span></div>
       <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price">${esc(chf(it.preis))}</span></div>
-      <div class="line2">${badge(it)}<span>${esc(known(it.groesse) && SZ.label(it) ? "Gr. " + SZ.label(it) : (it.unterkategorie || it.kategorie || ""))}</span></div>
+      <div class="line2">${badge(it)}${franklyPill(it)}<span>${esc(known(it.groesse) && SZ.label(it) ? "Gr. " + SZ.label(it) : (it.unterkategorie || it.kategorie || ""))}</span></div>
     </button>`;
 }
 function renderFilters() {
@@ -173,8 +204,42 @@ function applySel(all) {
   renderGrid();
   const t = $("shopTools"); if (t && t.scrollIntoView) t.scrollIntoView({ block: "start" });
 }
+/* Looks aus der Fotoecke: echte Menschen, die Frankly-Teile tragen */
+function streetItems(f) {
+  const nrs = (String(f.teile || "").toUpperCase().match(/FR-?\d{1,6}/g) || []).map(n => "FR-" + n.replace(/\D/g, "").padStart(6, "0"));
+  return [...new Set(nrs)].map(n => ITEMS.find(x => x.nr === n)).filter(Boolean);
+}
+function streetWho(f) { const ig = f.instagram ? "@" + String(f.instagram).replace(/^@/, "").replace(/[^A-Za-z0-9._]/g, "") : ""; return [f.name, ig].filter(Boolean).join(" · "); }
+function streetCard(f) {
+  const its = streetItems(f), u = URLS["fe:" + f.pfad];
+  return `
+    <div class="look">
+      <button class="card" type="button" data-street="${esc(f.id)}" style="gap:10px">
+        <div class="ph">${u ? `<img src="${esc(u)}" alt="Look aus der Fotoecke" loading="lazy" decoding="async">` : `<span class="nofoto">Foto lädt …</span>`}</div>
+        ${streetWho(f) ? `<span class="style">${esc(streetWho(f))}</span>` : ""}
+      </button>
+      ${its.length ? `<div class="thumbs">${its.map(it => `<button class="mini" type="button" data-item="${esc(it.nr)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>`).join("")}</div>` : ""}
+    </div>`;
+}
+function showStreet(id) {
+  const f = STREET.find(x => x.id === id); if (!f) return;
+  const its = streetItems(f), u = URLS["fe:" + f.pfad], ig = f.instagram ? String(f.instagram).replace(/^@/, "").replace(/[^A-Za-z0-9._]/g, "") : "";
+  openPanel(`
+    <div class="phead"><span class="sub">Look aus der Fotoecke</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
+    <div class="d">
+      <div class="big">${u ? `<img src="${esc(u)}" alt="Look aus der Fotoecke">` : ""}</div>
+      <div>
+        ${f.name ? `<h2 class="dt">${esc(f.name)}</h2>` : ""}
+        ${ig ? `<a class="btn" href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">@${esc(ig)}</a>` : ""}
+        <div class="sec">${its.length ? "Diese Teile trägt sie" : "Die Teile sind schon weg"}</div>
+        ${its.length ? `<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${its.map(card).join("")}</div>` : `<p class="hint">Stöbere nach ähnlichen Teilen in deiner Grösse.</p>`}
+        <div class="box"><span class="klabel">Fotoecke</span><p class="pline">Probier im Laden, mach dein Foto und teile es mit uns. Dafür gibt es einen Gutschein.</p></div>
+      </div>
+    </div>`);
+}
 function renderLooks() {
-  $("lookGrid").innerHTML = LOOKS.length ? LOOKS.map(l => {
+  const street = STREET.length ? `<h3 class="osec">Aus der Fotoecke</h3><div class="looks">${STREET.map(streetCard).join("")}</div>` : "";
+  const own = LOOKS.length ? `${street ? `<h3 class="osec">Kombis von Frankly</h3>` : ""}<div class="looks">` + LOOKS.map(l => {
     const first = ITEMS.find(i => i.id === l.items[0]);
     return `
     <div class="look">
@@ -185,7 +250,8 @@ function renderLooks() {
       </button>
       <div class="thumbs">${l.items.map(id => { const it = ITEMS.find(x => x.id === id); return it ? `<button class="mini" type="button" data-item="${esc(it.nr)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>` : ""; }).join("")}</div>
     </div>`;
-  }).join("") : `<p class="empty">Bald gibt es hier Looks zu sehen.</p>`;
+  }).join("") + `</div>` : "";
+  $("lookGrid").innerHTML = street || own ? street + own : `<p class="empty">Bald gibt es hier Looks zu sehen. Mach mit in der Fotoecke im Laden!</p>`;
 }
 
 /* ---------- Panel ---------- */
@@ -212,23 +278,25 @@ function showItem(nr) {
   openPanel(`
     <div class="phead"><span class="sub">Teil</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
-      <div class="big">${imgTag(it.foto_pfad, it.titel, true)}</div>
+      <div><div class="big">${imgTag(it.foto_pfad, it.titel, true)}</div>${galleryHtml(it)}</div>
       <div>
         <div class="nr"><small>Nummer</small>${esc(it.nr)}</div>
         <h2 class="dt">${esc(it.titel)}</h2>
-        <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}</div>
+        <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}${franklyPill(it)}</div>
+        ${it.owner_id === "OWN-001" ? `<p class="hint">Frankly-Teil: Hier gilt dein Fotoecke-Gutschein.</p>` : ""}
         ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? `Dieses Teil ist bis ${esc(shortDate(RENT[it.id].bis))} vermietet und danach wieder im Laden.` : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
         ${it.status === "Reserviert" ? `<p class="hint">Dieses Teil ist für jemanden reserviert.</p>` : ""}
         ${(it.stufe === "Lager" || it.stufe === "Online") && it.status === "Verfügbar" ? anfrageBox(it) : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
         ${kombiSection(it)}
+        ${(() => { const fs = STREET.filter(f => streetItems(f).some(x => x.id === it.id)); return fs.length ? `<div class="sec">So wurde es getragen</div><div class="thumbs">${fs.map(f => `<button class="mini" type="button" data-street="${esc(f.id)}">${URLS["fe:" + f.pfad] ? `<img src="${esc(URLS["fe:" + f.pfad])}" alt="">` : ""}${esc(f.name || "Look")}</button>`).join("")}</div>` : ""; })()}
         ${ls.length ? `<div class="sec">Steckt in diesen Looks</div><div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.style || "")} · ${esc(l.name)}</button>`).join("")}</div>` : ""}
         ${visitBox()}
         <div class="rowsmall"><button class="btn" type="button" data-share="${esc(it.nr)}">Link kopieren</button></div>
       </div>
     </div>`);
-  ensureBig(it.foto_pfad);
+  ensureBig(it.foto_pfad); loadExtras(it);
 }
 /* Kombiniere mit: Teile, die im Lager verknüpft wurden */
 function kombiSection(it) {
@@ -398,6 +466,7 @@ document.addEventListener("click", e => {
   const d = b.dataset;
   if (d.close !== undefined) return closePanel();
   if (d.cat) { cat = d.cat; renderFilters(); renderGrid(); return; }
+  if (d.gal) return showGal(d.gal, b);
   if (d.sz) { const arr = TMP[d.sz], on = !arr.includes(d.v); if (on) arr.push(d.v); else arr.splice(arr.indexOf(d.v), 1); b.setAttribute("aria-pressed", on); return; }
   if (d.szgo !== undefined) return applySel(false);
   if (d.szall !== undefined) return applySel(true);
@@ -405,6 +474,7 @@ document.addEventListener("click", e => {
   if (d.szshow !== undefined) { SHOWALL = !SHOWALL; return renderGrid(); }
   if (d.item) return showItem(d.item);
   if (d.look) return showLook(d.look);
+  if (d.street) return showStreet(d.street);
   if (d.owner) return showOwner(d.owner);
   if (d.jkat) { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); return; }
   if (d.jsize) {
