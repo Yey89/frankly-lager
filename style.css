@@ -245,3 +245,10 @@ label.check input{width:auto;margin-top:3px}
 .etirow{display:flex;gap:10px;align-items:center;padding:4px;cursor:pointer;font-size:13px;line-height:1.3}
 .etirow input{width:20px;height:20px;flex:none}
 .etirow img,.etirow .nofoto{width:34px;height:44px;object-fit:cover;flex:none;background:var(--bg)}
+
+/* Neu-Hinweis oben im Lager: Reservationen und Anfragen */
+.news{border:2px solid var(--red);background:var(--surface);padding:10px 12px;margin:12px 0 4px}
+.newshead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;color:var(--red);margin-bottom:6px}
+.news .rlist li{align-items:center}
+.newsimg{width:40px;height:52px;object-fit:cover;display:block}
+.newsbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}

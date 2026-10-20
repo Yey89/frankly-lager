@@ -278,7 +278,7 @@ async function startApp() {
   if (started) return; started = true;
   show("app");
   $("grid").innerHTML = `<p class="loading">Teile werden geladen …</p>`;
-  try { await load(); renderAll(); }
+  try { await load(); renderAll(); startWatch(); }
   catch (err) { started = false; $("grid").innerHTML = `<p class="err">${esc(nice(err))}</p>`; }
 }
 
@@ -442,7 +442,56 @@ function renderOwners() {
     </button>`;
   }).join("");
 }
+/* ---------- Neu: Reservationen und Anfragen gut sichtbar ---------- */
+function isRes(a) { return /^Online reserviert/.test(a.nachricht || ""); }
+function renderNews() {
+  const el = $("news"); if (!el) return;
+  const open = ANFRAGEN.filter(a => !a.erledigt).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
+  const nRes = open.filter(isRes).length, nAnf = open.length - nRes;
+  document.title = (open.length ? `(${open.length}) ` : "") + "Frankly Lager";
+  if (!open.length) { el.innerHTML = ""; return; }
+  const parts = [nRes ? `${nRes} ${nRes === 1 ? "Reservation" : "Reservationen"}` : "", nAnf ? `${nAnf} ${nAnf === 1 ? "Anfrage" : "Anfragen"}` : ""].filter(Boolean).join(" · ");
+  const canAsk = "Notification" in window && Notification.permission === "default";
+  el.innerHTML = `<div class="news" role="status">
+    <div class="newshead"><b>Neu: ${esc(parts)}</b>${canAsk ? `<button class="btn ghost" type="button" id="notifBtn">Mitteilungen am Mac einschalten</button>` : ""}</div>
+    <ul class="rlist">${open.slice(0, 8).map(a => { const it = ITEMS.find(x => x.id === a.item_id); return `<li>
+      <span>${it && imgUrl(it.foto_pfad) ? `<img class="newsimg" src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}</span>
+      <span><b>${isRes(a) ? "Reservation" : "Anfrage"}</b> · ${it ? `${esc(it.nr)} ${esc(it.titel || "")}` : "Teil"}<br><b>${esc(a.name)}</b> · ${esc(a.kontakt)}${a.nachricht ? `<br><span class="hint">${esc(a.nachricht)}</span>` : ""}</span>
+      <span class="newsbtns">${it ? `<button class="btn" type="button" data-item="${esc(it.id)}">Öffnen</button>` : ""}<button class="btn" type="button" data-anfdone="${esc(a.id)}">Erledigt</button></span></li>`; }).join("")}</ul>
+    ${open.length > 8 ? `<p class="hint">… und ${open.length - 8} weitere. Filter «Anfrage offen» zeigt alle.</p>` : ""}
+  </div>`;
+}
+/* Alle 60 Sekunden nachschauen, ob etwas Neues reingekommen ist */
+let watchTimer = null, knownAnf = null;
+function startWatch() {
+  knownAnf = new Set(ANFRAGEN.map(a => a.id));
+  if (watchTimer) return;
+  watchTimer = setInterval(checkNew, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkNew(); });
+}
+async function checkNew() {
+  if (!sb || !started) return;
+  const af = await sb.from("anfragen").select("*").order("created_at", { ascending: false });
+  if (af.error) return;
+  const fresh = (af.data || []).filter(a => !knownAnf.has(a.id));
+  ANFRAGEN = af.data || [];
+  if (fresh.length) {
+    const it = await sb.from("items").select("*").in("id", [...new Set(fresh.map(a => a.item_id))]);
+    (it.data || []).forEach(n => { ITEMS = ITEMS.map(x => x.id === n.id ? n : x); });
+    fresh.forEach(a => knownAnf.add(a.id));
+    const a = fresh[0], t = ITEMS.find(x => x.id === a.item_id);
+    const msg = `${isRes(a) ? "Neue Reservation" : "Neue Anfrage"}: ${t ? t.nr + " " + (t.titel || "") : ""} von ${a.name}`;
+    toast(msg, 8000); beep();
+    try { if ("Notification" in window && Notification.permission === "granted") new Notification("0–100 Frankly", { body: msg + (fresh.length > 1 ? ` (+${fresh.length - 1})` : ""), icon: "icon-192.png" }); } catch (e) {}
+  }
+  renderAll();
+}
+function beep() {
+  try { const c = new (window.AudioContext || window.webkitAudioContext)(), o = c.createOscillator(), g = c.createGain();
+    o.frequency.value = 880; g.gain.value = 0.08; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + 0.18); } catch (e) {}
+}
 function renderAll() {
+  renderNews();
   renderCats(); renderGrid(); renderLooks(); renderOwners(); renderAnm();
   if (window.renderInsights && !$("viewInsights").hidden) renderInsights();
   const mt = missingThumbs().length;
@@ -1564,6 +1613,7 @@ document.addEventListener("click", e => {
     case "logoutBtn": return sb.auth.signOut();
     case "reloadBtn": return reload(true);
     case "thumbBtn": return makeThumbs(b);
+    case "notifBtn": try { Notification.requestPermission().then(() => renderNews()); } catch (e) {} return;
     case "cutBtn": return cutMany(missingCuts(), b);
   }
 });
