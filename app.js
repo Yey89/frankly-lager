@@ -46,8 +46,20 @@ function uuid() {
   const h = [...b].map(x => x.toString(16).padStart(2, "0")).join("");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
-function imgUrl(path) { return path ? URLS[path] || "" : ""; }
-function imgTag(path, alt) { const u = imgUrl(path); return u ? `<img src="${esc(u)}" alt="${esc(alt)}" loading="lazy">` : `<span class="nofoto">Foto fehlt</span>`; }
+/* Karten: kleines Vorschaubild (thumbs/…). Detail: Originalfoto. */
+function imgUrl(path) { return path ? URLS["thumbs/" + path] || URLS[path] || "" : ""; }
+function bigUrl(path) { return path ? URLS[path] || URLS["thumbs/" + path] || "" : ""; }
+function imgTag(path, alt, big) { const u = big ? bigUrl(path) : imgUrl(path); return u ? `<img src="${esc(u)}" alt="${esc(alt)}" loading="lazy" decoding="async">` : `<span class="nofoto">Foto fehlt</span>`; }
+const RENT_PROV = 30; // Anteil Frankly bei Vermietungen (Owner erhält 70 %)
+const SZ = window.FRANKLY_SIZES;
+function sizePreview(txt, kat) {
+  if (!SZ) return "";
+  const g = SZ.group(kat), s = SZ.parse(txt, kat);
+  if (g === "alle") return "Im Shop: passt immer (keine Grösse nötig)";
+  if (!txt) return "Im Shop: ohne Grösse, wird allen gezeigt";
+  if (!s.length) return "Im Shop: Grösse nicht erkannt, wird allen gezeigt. Tipp: z.B. M, 38 oder W28";
+  return "Im Shop als: " + s.join(" / ");
+}
 function lookPath(l) { if (l.foto_pfad) return l.foto_pfad; const f = ITEMS.find(x => x.id === l.items[0]); return f ? f.foto_pfad : ""; }
 function looksOf(id) { return LOOKS.filter(l => l.items.includes(id)); }
 function nice(err) {
@@ -197,7 +209,9 @@ async function load() {
   LOOKS = (b.data || []).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id) }));
   OWNERS = c.data || [];
   RENTALS = d.data || [];
-  await signUrls(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)));
+  const allPaths = ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)).filter(Boolean);
+  await signUrls(allPaths.map(p => "thumbs/" + p));
+  await signUrls(allPaths);
   const an = await sb.from("anmeldungen").select("*").order("created_at", { ascending: false });
   ANM = an.error ? [] : (an.data || []);
   const af = await sb.from("anfragen").select("*").order("created_at", { ascending: false });
@@ -213,23 +227,24 @@ async function signUrls(paths) {
   const todo = [...new Set(paths.filter(p => p && !URLS[p]))];
   for (let i = 0; i < todo.length; i += 100) {
     const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(todo.slice(i, i + 100), 60 * 60 * 12);
-    if (error) throw error;
+    if (error && !todo[i].startsWith("thumbs/")) throw error;
     (data || []).forEach(x => { if (x.signedUrl && x.path) URLS[x.path] = x.signedUrl; });
   }
 }
 
 /* Fotos verkleinern (max. 1600 px) */
-function resizeImage(file) {
+function resizeImage(file, max, quality) {
+  max = max || 1600; quality = quality || 0.84;
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const s = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
       const c = document.createElement("canvas");
       c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
       c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      c.toBlob(b => b ? resolve(b) : reject(new Error("Foto konnte nicht verarbeitet werden.")), "image/jpeg", 0.84);
+      c.toBlob(b => b ? resolve(b) : reject(new Error("Foto konnte nicht verarbeitet werden.")), "image/jpeg", quality);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Dieses Bild konnte nicht gelesen werden. Bitte JPG, PNG oder HEIC wählen.")); };
     img.src = url;
@@ -239,10 +254,31 @@ async function uploadPhoto(path, blob) {
   const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg", upsert: false });
   if (error) throw error;
   URLS[path] = URL.createObjectURL(blob);
+  await uploadThumb(path, blob).catch(() => {}); // Vorschaubild: Fehler hier stoppt nichts
+}
+/* Kleines Vorschaubild (600 px) für Shop und Übersicht: thumbs/<Pfad> */
+async function uploadThumb(path, blob) {
+  const t = await resizeImage(blob, 600, 0.78);
+  const { error } = await sb.storage.from(BUCKET).upload("thumbs/" + path, t, { contentType: "image/jpeg", upsert: true });
+  if (error) throw error;
+  URLS["thumbs/" + path] = URL.createObjectURL(t);
+}
+function missingThumbs() { return [...new Set(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)).filter(p => p && URLS[p] && !URLS["thumbs/" + p]))]; }
+async function makeThumbs(btn) {
+  const todo = missingThumbs(); if (!todo.length) return;
+  busy(btn, true, "Wird erstellt …");
+  let done = 0, failed = 0;
+  for (const p of todo) {
+    try { const r = await fetch(URLS[p]); if (!r.ok) throw new Error(r.status); await uploadThumb(p, await r.blob()); done++; }
+    catch (e) { failed++; }
+    btn.textContent = `Vorschaubilder ${done + failed} von ${todo.length} …`;
+  }
+  busy(btn, false); renderAll();
+  toast(failed ? `${done} Vorschaubilder erstellt, ${failed} fehlgeschlagen` : `${done} Vorschaubilder erstellt. Der Shop lädt jetzt schneller.`, 5000);
 }
 async function removePhoto(path) {
   if (!path || !(path.startsWith("items/") || path.startsWith("looks-neu/"))) return; // Originale aus dem Starterpaket bleiben
-  await sb.storage.from(BUCKET).remove([path]);
+  await sb.storage.from(BUCKET).remove([path, "thumbs/" + path]);
 }
 
 /* ---------- Übersicht Teile ---------- */
@@ -319,7 +355,8 @@ function renderOwners() {
 }
 function renderAll() {
   renderCats(); renderGrid(); renderLooks(); renderOwners(); renderAnm();
-  $("foot").textContent = `0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`;
+  const mt = missingThumbs().length;
+  $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "");
 }
 function setTab(t) {
   ["items", "looks", "owners", "anm"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
@@ -416,7 +453,7 @@ function showItem(id, editing) {
     <div class="phead"><span class="sub">Teil</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
       <div>
-        <div class="big">${imgTag(it.foto_pfad, it.titel)}</div>
+        <div class="big">${imgTag(it.foto_pfad, it.titel, true)}</div>
         <div class="rowsmall">
           <label class="btn" for="rep-lib">Foto ersetzen</label>
           <input id="rep-lib" type="file" accept="image/*" hidden>
@@ -463,7 +500,7 @@ function showItemEdit(id) {
   openPanel(`
     <div class="phead"><span class="sub">Teil bearbeiten</span><button class="btn ghost close" type="button" data-view="${esc(id)}">Abbrechen ✕</button></div>
     <div class="d">
-      <div class="big">${imgTag(it.foto_pfad, it.titel)}</div>
+      <div class="big">${imgTag(it.foto_pfad, it.titel, true)}</div>
       <div>
         <div class="nr"><small>Anzeigenummer</small>${esc(it.nr)}</div>
         <label class="sec" for="e-titel">Titel</label><input id="e-titel" class="search" style="width:100%" value="${esc(it.titel)}">
@@ -478,6 +515,12 @@ function showItemEdit(id) {
         <div class="row"><button class="btn primary" type="button" data-save="${esc(id)}">Speichern</button><button class="btn" type="button" data-view="${esc(id)}">Abbrechen</button></div>
       </div>
     </div>`, { type: "itemedit", id });
+  const gi = $("e-groesse");
+  if (gi) {
+    const h = document.createElement("span"); h.className = "hint"; h.id = "e-szprev"; gi.after(h);
+    const upd = () => { h.textContent = sizePreview(gi.value.trim(), $("e-kategorie").value); };
+    gi.addEventListener("input", upd); $("e-kategorie").addEventListener("change", upd); upd();
+  }
 }
 
 async function patchItem(id, patch, msg) {
@@ -571,10 +614,11 @@ function openAction(kind, it) {
     };
   }
   if (kind === "rent") {
+    const prov = self ? 100 : RENT_PROV;
     actForm(`<div class="sec" style="margin:0">Vermietung erfassen</div>
       <div class="two"><label>Mietbetrag CHF<input id="a-betrag" inputmode="decimal"></label><label>Von<input id="a-von" type="date" value="${iso(today())}"></label></div>
       <label>Bis (geplante Rückgabe)<input id="a-bis" type="date"></label>
-      ${self ? "" : `<p class="hint">Die Miete wird ${100 - prov}/${prov} geteilt und am letzten Samstag des Monats ausbezahlt.</p>`}
+      ${self ? "" : `<p class="hint">Die Miete wird ${100 - prov}/${prov} geteilt (Owner/Frankly) und am letzten Samstag des Monats ausbezahlt. Kaution nicht vergessen: Die Mieterin bringt das Teil gereinigt mit Quittung zurück.</p>`}
       <div class="rowsmall"><button class="btn primary" type="submit">Vermietung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const b = parsePrice($("a-betrag").value);
@@ -949,7 +993,7 @@ function anmMail(kind, a, monat, text) {
   }
   if (kind === "wait") return ["Deine Anmeldung bei 0–100 Frankly", hi + `danke für deine Anmeldung bei 0–100 Frankly! ${monat ? `Für ${monthLabel(monat)} sind wir leider schon voll. ` : ""}Wir haben dich auf die Warteliste gesetzt und melden uns, sobald ein Platz frei wird.\n\n` + (text || "") + GRUSS];
   if (kind === "reject") return ["Deine Anmeldung bei 0–100 Frankly", hi + `vielen Dank für dein Interesse an 0–100 Frankly und für deine Anmeldung. Leider können wir dich diesmal nicht aufnehmen.\n\n` + (text || "") + GRUSS];
-  if (kind === "rent-yes") return ["Vermieten bei 0–100 Frankly: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 90 %.\n\n` + (text || "") + GRUSS];
+  if (kind === "rent-yes") return ["Vermieten bei 0–100 Frankly: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.\n\n` + (text || "") + GRUSS];
   if (kind === "rent-no") return ["Vermieten bei 0–100 Frankly", hi + `danke für deine Fotos! Leider passen deine Teile diesmal nicht in unser Vermiet-Angebot.\n\n` + (text || "") + GRUSS];
 }
 async function patchAnm(id, patch, msg) {
@@ -1011,7 +1055,7 @@ function showLook(id) {
   openPanel(`
     <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
-      <div class="big">${imgTag(lookPath(l), l.name)}</div>
+      <div class="big">${imgTag(lookPath(l), l.name, true)}</div>
       <div>
         <div class="nr"><small>Look</small>${esc(l.nr)}</div>
         <div class="style" style="margin-top:14px">${esc(l.style || "")}</div>
@@ -1094,7 +1138,7 @@ function showAdd() {
           <label>Preis CHF<input id="f-preis" inputmode="decimal" placeholder="offen"></label>
         </div>
         <div class="two">
-          <label>Grösse<input id="f-groesse" placeholder="z.B. M / 38"></label>
+          <label>Grösse<input id="f-groesse" placeholder="z.B. M, 38 oder W28"><span class="hint" id="f-szprev"></span></label>
           <label>Marke<input id="f-marke" placeholder="optional"></label>
         </div>
         <label>Notiz<textarea id="f-notiz" rows="2" placeholder="Was fällt auf? Zustand, Details …"></textarea></label>
@@ -1107,6 +1151,8 @@ function showAdd() {
   $("f-phase").addEventListener("change", () => { phaseTouched = true; });
   $("f-owner").addEventListener("change", () => { if (!phaseTouched) $("f-phase").innerHTML = phaseOptions($("f-owner").value === SELF ? "" : defaultPhase()); });
   $("f-titel").addEventListener("input", checkReady);
+  const szUpd = () => { $("f-szprev").textContent = sizePreview(val("f-groesse"), $("f-kategorie").value); };
+  $("f-groesse").addEventListener("input", szUpd); $("f-kategorie").addEventListener("change", szUpd); szUpd();
   $("addForm").addEventListener("submit", e => { e.preventDefault(); createItem(); });
   sb.rpc("naechste_item_nr").then(({ data, error }) => { const el = $("nextNr"); if (el) el.textContent = error || !data ? "wird vergeben" : data; });
 }
@@ -1229,6 +1275,7 @@ document.addEventListener("click", e => {
     case "addOwnerBtn": return ownerForm();
     case "logoutBtn": return sb.auth.signOut();
     case "reloadBtn": return reload(true);
+    case "thumbBtn": return makeThumbs(b);
   }
 });
 $("q").addEventListener("input", renderGrid);

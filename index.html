@@ -40,9 +40,10 @@
       <p class="lead">Kleider aus echten Kleiderschränken, 0 bis 100 Franken. Ehrlich gesagt: nicht mehr und nicht weniger.</p>
       <p class="where" id="whereLine"></p>
     </div>
-    <div class="tools">
-      <input class="search" id="q" type="search" placeholder="Suchen: Jacke, Levi's, M …" aria-label="Teile durchsuchen">
-      <select class="search fstat" id="fsize" aria-label="Nach Grösse filtern"><option value="">Alle Grössen</option></select>
+    <div class="sizepick" id="sizePick" hidden></div>
+    <div class="tools" id="shopTools">
+      <div class="sizebar" id="sizeBar" hidden></div>
+      <input class="search" id="q" type="search" placeholder="Suchen: Jacke, Levi's, schwarz …" aria-label="Teile durchsuchen">
       <div class="chips" id="cats"></div>
     </div>
     <div class="grid" id="grid"><p class="loading">Teile werden geladen …</p></div>
@@ -71,7 +72,7 @@
 
     <div class="rentnote">
       <span class="klabel">Auch zum Vermieten</span>
-      <p>Abendkleider und Statement Pieces kannst du bei uns auch <b>vermieten</b>. Dafür brauchen wir Fotos. Wir prüfen jedes Teil und sagen dir <b>innerhalb von 24 Stunden</b> zu oder ab. Auch bei Mieten gilt: 90 % für dich, 10 % für Frankly.</p>
+      <p>Abendkleider und Statement Pieces kannst du bei uns auch <b>vermieten</b>. Dafür brauchen wir Fotos. Wir prüfen jedes Teil und sagen dir <b>innerhalb von 24 Stunden</b> zu oder ab. Bei Mieten gehen <b>70 % an dich</b> und 30 % an Frankly, weil wir Prüfung, Übergabe und Kaution übernehmen. Die Mieterin lässt das Teil vor der Rückgabe reinigen und bringt die Quittung mit.</p>
     </div>
 
     <form class="form joinform" id="joinForm" novalidate>
@@ -167,6 +168,7 @@
   if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
 </script>
 <script src="config.js"></script>
+<script src="sizes.js"></script>
 <script src="shop.js"></script>
 </body>
 </html>

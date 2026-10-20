@@ -62,3 +62,13 @@ label.short{max-width:260px}
 
 .sfoot{margin-top:48px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .sfoot .team{color:var(--muted)}
+
+/* Grösse wählen */
+.sizepick{display:grid;gap:14px;max-width:760px;border:2px solid var(--ink);background:var(--surface);padding:18px;margin-top:8px}
+.sizepick .szt{margin:0;font-size:clamp(24px,4vw,34px)}
+.sizepick .hint{margin:0}
+.szchip{display:inline-flex;flex-direction:column;align-items:center;gap:2px;min-width:64px;padding:8px 10px}
+.szchip b{font-size:16px}
+.szchip small{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
+.szchip[aria-pressed="true"] small{color:inherit}
+.sizebar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;width:100%;font-size:14px;border-bottom:1px solid var(--line);padding-bottom:10px}

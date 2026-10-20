@@ -27,14 +27,21 @@ const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "A
 const CFG = window.FRANKLY_CONFIG;
 const $ = id => document.getElementById(id);
 let sb = null, ITEMS = [], OWNERS = [], LOOKS = [], RENT = {}, URLS = {}, cat = "Alle";
+const SZ = window.FRANKLY_SIZES;
+const SEL_KEY = "frankly-groessen";
+let SEL = loadSel(), TMP = null;
+function loadSel() { try { const v = JSON.parse(localStorage.getItem(SEL_KEY) || "null"); return v && v.oben ? v : null; } catch (e) { return null; } }
+function saveSel() { try { localStorage.setItem(SEL_KEY, JSON.stringify(SEL)); } catch (e) {} }
 
 /* ---------- Hilfen ---------- */
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function chf(v) { if (v === null || v === undefined || v === "") return "Preis im Laden"; const n = Number(v); return "CHF " + n.toFixed(n % 1 ? 2 : 0); }
 function known(v) { return v != null && v !== "" && !/prüfen|unbekannt|\?/i.test(String(v)); }
 function clean(v) { return String(v).replace(/\s*\(.*?\)\s*/g, " ").trim(); }
-function imgUrl(p) { return p ? URLS[p] || "" : ""; }
-function imgTag(p, alt) { const u = imgUrl(p); return u ? `<img src="${esc(u)}" alt="${esc(alt)}" loading="lazy">` : `<span class="nofoto">Foto folgt</span>`; }
+/* Karten zeigen das kleine Vorschaubild (thumbs/…), die Detailansicht das grosse Foto */
+function imgUrl(p) { return p ? URLS["thumbs/" + p] || URLS[p] || "" : ""; }
+function bigUrl(p) { return p ? URLS[p] || URLS["thumbs/" + p] || "" : ""; }
+function imgTag(p, alt, big) { const u = big ? bigUrl(p) : imgUrl(p); return u ? `<img src="${esc(u)}" alt="${esc(alt)}" loading="lazy" decoding="async">` : `<span class="nofoto">${p ? "Foto lädt …" : "Foto folgt"}</span>`; }
 function ownerOf(id) { return OWNERS.find(o => o.id === id); }
 let tt; function toast(m, ms) { const t = $("toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, ms || 2800); }
 const pad = n => String(n).padStart(2, "0");
@@ -89,11 +96,26 @@ async function load() {
     (r.data || []).forEach(x => { const cur = RENT[x.item_id]; if (!cur || String(x.von) > String(cur.von)) RENT[x.item_id] = x; });
   }
   LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length);
-  const paths = [...new Set(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)).filter(Boolean))];
+}
+/* Fotos erst nach dem Anzeigen holen: zuerst die kleinen Vorschaubilder, wo keines existiert das Original */
+async function signPaths(paths) {
+  const ok = new Set();
   for (let i = 0; i < paths.length; i += 100) {
     const r = await sb.storage.from(CFG.bucket || "fotos").createSignedUrls(paths.slice(i, i + 100), 60 * 60 * 6);
-    (r.data || []).forEach(x => { if (x.signedUrl && x.path) URLS[x.path] = x.signedUrl; });
+    (r.data || []).forEach(x => { if (x.signedUrl && x.path) { URLS[x.path] = x.signedUrl; ok.add(x.path); } });
   }
+  return ok;
+}
+async function loadImages() {
+  const paths = [...new Set(ITEMS.map(i => i.foto_pfad).concat(LOOKS.map(l => l.foto_pfad)).filter(Boolean))];
+  const ok = await signPaths(paths.map(p => "thumbs/" + p));
+  const missing = paths.filter(p => !ok.has("thumbs/" + p));
+  if (missing.length) await signPaths(missing);
+}
+async function ensureBig(p) {
+  if (!p || URLS[p]) return;
+  const r = await sb.storage.from(CFG.bucket || "fotos").createSignedUrl(p, 60 * 60 * 6);
+  if (r.data && r.data.signedUrl) { URLS[p] = r.data.signedUrl; const img = panel.querySelector(".big img"); if (img) img.src = URLS[p]; }
 }
 
 /* ---------- Stöbern ---------- */
@@ -102,22 +124,49 @@ function card(it) {
     <button class="card" type="button" data-item="${esc(it.nr)}">
       <div class="ph">${imgTag(it.foto_pfad, it.titel)}<span class="tag">${esc(it.nr)}</span></div>
       <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price">${esc(chf(it.preis))}</span></div>
-      <div class="line2">${badge(it)}<span>${esc(known(it.groesse) ? "Gr. " + clean(it.groesse) : (it.unterkategorie || it.kategorie || ""))}</span></div>
+      <div class="line2">${badge(it)}<span>${esc(known(it.groesse) && SZ.label(it) ? "Gr. " + SZ.label(it) : (it.unterkategorie || it.kategorie || ""))}</span></div>
     </button>`;
 }
 function renderFilters() {
   const cs = ["Alle"].concat(CATS.filter(c => ITEMS.some(i => i.kategorie === c)));
   $("cats").innerHTML = cs.map(c => `<button class="chip" type="button" aria-pressed="${c === cat}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
-  const sizes = [...new Set(ITEMS.map(i => known(i.groesse) ? clean(i.groesse) : null).filter(Boolean))].sort();
-  const cur = $("fsize").value;
-  $("fsize").innerHTML = `<option value="">Alle Grössen</option>` + sizes.map(s => `<option ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
 }
 function renderGrid() {
-  const q = $("q").value.trim().toLowerCase(), size = $("fsize").value;
-  const list = ITEMS.filter(i => (cat === "Alle" || i.kategorie === cat) && (!size || (known(i.groesse) && clean(i.groesse) === size)) &&
+  const q = $("q").value.trim().toLowerCase();
+  const list = ITEMS.filter(i => (cat === "Alle" || i.kategorie === cat) && SZ.matches(i, SEL) &&
     (!q || [i.nr, i.titel, i.marke, i.farben, i.kategorie, i.unterkategorie, i.groesse, i.material].join(" ").toLowerCase().includes(q)));
   $("grid").innerHTML = !ITEMS.length ? `<p class="empty">Gerade ist nichts online. Komm im Laden vorbei, wir hängen laufend neue Teile auf.</p>`
-    : (list.length ? list.map(card).join("") : `<p class="empty">Nichts gefunden. Versuch es mit einem anderen Filter.</p>`);
+    : (list.length ? list.map(card).join("") : `<p class="empty">In deiner Grösse ist gerade nichts dabei. Ändere die Grösse oben oder schau bald wieder vorbei.</p>`);
+  renderSizeBar(list.length);
+}
+
+/* ---------- Grösse wählen ---------- */
+function selText(g, arr) { return arr.length ? arr.join(", ") : "alle"; }
+function renderSizeBar(n) {
+  if (!SEL) { $("sizeBar").hidden = true; return; }
+  const all = !SEL.oben.length && !SEL.unten.length && !SEL.schuhe.length;
+  $("sizeBar").hidden = false;
+  $("sizeBar").innerHTML = `<span><b>${n}</b> ${n === 1 ? "Teil" : "Teile"} · ${all ? "alle Grössen" : `Oben <b>${esc(selText("oben", SEL.oben))}</b> · Unten <b>${esc(selText("unten", SEL.unten))}</b> · Schuhe <b>${esc(selText("schuhe", SEL.schuhe))}</b>`}</span><button class="btn" type="button" data-szedit>Grösse ändern</button>`;
+}
+function chipRow(g, opts, hints) {
+  return opts.map(v => `<button class="chip szchip" type="button" data-sz="${g}" data-v="${v}" aria-pressed="${TMP[g].includes(v)}"><b>${v}</b>${hints ? `<small>${esc(hints[v])}</small>` : ""}</button>`).join("");
+}
+function showPicker() {
+  TMP = SEL ? { oben: SEL.oben.slice(), unten: SEL.unten.slice(), schuhe: SEL.schuhe.slice() } : { oben: [], unten: [], schuhe: [] };
+  $("sizePick").innerHTML = `
+    <h2 class="vtitle szt">Deine Grösse</h2>
+    <p class="hint">Wähl, was dir passt, gern auch zwei Grössen. Leer lassen heisst: alle Grössen. Unter jeder Grösse steht die passende EU-Grösse und Jeans-Weite.</p>
+    <div class="field"><span class="flabel">Oberteile, Kleider, Jacken</span><div class="chips">${chipRow("oben", SZ.LETTERS, SZ.HINT_OBEN)}</div></div>
+    <div class="field"><span class="flabel">Hosen &amp; Röcke</span><div class="chips">${chipRow("unten", SZ.LETTERS, SZ.HINT_UNTEN)}</div></div>
+    <div class="field"><span class="flabel">Schuhe</span><div class="chips">${chipRow("schuhe", SZ.SHOES)}</div></div>
+    <div class="rowsmall"><button class="btn primary big-btn" type="button" data-szgo>Teile zeigen</button><button class="btn ghost" type="button" data-szall>Alle Teile ansehen</button></div>`;
+  $("sizePick").hidden = false; $("sizeBar").hidden = true; $("shopTools").hidden = true; $("grid").hidden = true;
+}
+function applySel(all) {
+  SEL = all ? { oben: [], unten: [], schuhe: [] } : TMP; saveSel();
+  $("sizePick").hidden = true; $("shopTools").hidden = false; $("grid").hidden = false;
+  renderGrid();
+  const t = $("shopTools"); if (t && t.scrollIntoView) t.scrollIntoView({ block: "start" });
 }
 function renderLooks() {
   $("lookGrid").innerHTML = LOOKS.length ? LOOKS.map(l => {
@@ -153,12 +202,12 @@ function showItem(nr) {
   if (!it) { openPanel(`<div class="phead"><span class="sub">Teil</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div><h2 class="dt">${esc(nr)}</h2><p class="desc">Dieses Teil ist gerade nicht mehr im Laden. Vielleicht wurde es schon verkauft.</p><button class="btn" type="button" data-close>Weiter stöbern</button>`); return; }
   setParam(it.nr);
   const o = ownerOf(it.owner_id);
-  const facts = [["Grösse", it.groesse], ["Marke", it.marke], ["Material", it.material], ["Farben", it.farben], ["Muster", it.muster], ["Schnitt", it.schnitt], ["Zustand", it.zustand], ["Kategorie", it.unterkategorie || it.kategorie]].filter(([, v]) => known(v));
+  const facts = [["Grösse", SZ.label(it) || it.groesse], ["Marke", it.marke], ["Material", it.material], ["Farben", it.farben], ["Muster", it.muster], ["Schnitt", it.schnitt], ["Zustand", it.zustand], ["Kategorie", it.unterkategorie || it.kategorie]].filter(([, v]) => known(v));
   const ls = LOOKS.filter(l => l.items.includes(it.id));
   openPanel(`
     <div class="phead"><span class="sub">Teil</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
-      <div class="big">${imgTag(it.foto_pfad, it.titel)}</div>
+      <div class="big">${imgTag(it.foto_pfad, it.titel, true)}</div>
       <div>
         <div class="nr"><small>Nummer</small>${esc(it.nr)}</div>
         <h2 class="dt">${esc(it.titel)}</h2>
@@ -173,6 +222,7 @@ function showItem(nr) {
         <div class="rowsmall"><button class="btn" type="button" data-share="${esc(it.nr)}">Link kopieren</button></div>
       </div>
     </div>`);
+  ensureBig(it.foto_pfad);
 }
 /* Teile im Lager: Anprobe anfragen */
 function anfrageBox(it) {
@@ -335,6 +385,10 @@ document.addEventListener("click", e => {
   const d = b.dataset;
   if (d.close !== undefined) return closePanel();
   if (d.cat) { cat = d.cat; renderFilters(); renderGrid(); return; }
+  if (d.sz) { const arr = TMP[d.sz], on = !arr.includes(d.v); if (on) arr.push(d.v); else arr.splice(arr.indexOf(d.v), 1); b.setAttribute("aria-pressed", on); return; }
+  if (d.szgo !== undefined) return applySel(false);
+  if (d.szall !== undefined) return applySel(true);
+  if (d.szedit !== undefined) return showPicker();
   if (d.item) return showItem(d.item);
   if (d.look) return showLook(d.look);
   if (d.owner) return showOwner(d.owner);
@@ -358,7 +412,6 @@ document.addEventListener("click", e => {
 });
 function closePanelIfOpen() { if (!ov.hidden) closePanel(); }
 $("q").addEventListener("input", renderGrid);
-$("fsize").addEventListener("change", renderGrid);
 
 /* ---------- Start ---------- */
 async function init() {
@@ -368,8 +421,12 @@ async function init() {
   if (!window.supabase || !CFG) { $("grid").innerHTML = `<p class="err">Die Seite konnte nicht geladen werden. Bitte neu laden.</p>`; return; }
   // Eigener, login-freier Zugang: liest nie eine gespeicherte Team-Anmeldung
   sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "frankly-shop" } });
-  try { await load(); renderFilters(); renderGrid(); renderLooks(); }
-  catch (e) { $("grid").innerHTML = `<p class="empty">Die Teile können gerade nicht geladen werden. Bitte versuch es später nochmals.</p>`; }
+  try {
+    await load(); renderFilters(); renderLooks();
+    if (SEL) renderGrid(); else showPicker();
+    await loadImages(); renderGrid(); renderLooks();
+  }
+  catch (e) { $("grid").hidden = false; $("grid").innerHTML = `<p class="empty">Die Teile können gerade nicht geladen werden. Bitte versuch es später nochmals.</p>`; }
   const nr = new URLSearchParams(location.search).get("teil");
   if (nr) showItem(nr.toUpperCase());
 }

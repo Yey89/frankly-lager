@@ -183,7 +183,7 @@ function render() {
     <div class="ohead">
       <span class="sub">${esc(o.id)}</span>
       <h1 class="claim">Hallo ${esc(o.profilname)}</h1>
-      <p class="lead">Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf und jeder Miete bekommst du ${esc(share)} %.</p>
+      <p class="lead">Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf bekommst du ${esc(share)} %, von jeder Miete 70 %.</p>
     </div>
     <div class="okpis">
       <div class="okpi"><span class="klabel">Verdient bisher</span><span class="kval">${esc(chf(earned))}</span></div>
@@ -224,7 +224,8 @@ document.addEventListener("submit", e => {
 async function loadPhotos() {
   const paths = [...new Set(DATA.items.map(i => i.foto_pfad).filter(Boolean))];
   for (const p of paths) {
-    const r = await sb.storage.from(CFG.bucket || "fotos").createSignedUrl(p, 60 * 60 * 6);
+    let r = await sb.storage.from(CFG.bucket || "fotos").createSignedUrl("thumbs/" + p, 60 * 60 * 6);
+    if (!(r.data && r.data.signedUrl)) r = await sb.storage.from(CFG.bucket || "fotos").createSignedUrl(p, 60 * 60 * 6);
     if (r.data && r.data.signedUrl) URLS[p] = r.data.signedUrl;
   }
 }
