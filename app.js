@@ -10,8 +10,9 @@ const BUCKET = CFG.bucket || "fotos";
 const SELF = "OWN-001"; // Frankly / eigene Teile: keine Provision, keine Abrechnung
 const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet", "Zurückgegeben", "Gespendet"];
 const CLOSED = ["Verkauft", "Zurückgegeben", "Gespendet"];
-const STUFEN = ["Stange", "Reduziert", "Upcycling", "Lager"];
-const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Monat 2 · Upcycling-Stange", Lager: "Monat 3 · Lager, auf Anfrage" };
+const STUFEN = ["Stange", "Reduziert", "Upcycling", "Lager", "Online"];
+const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Monat 2 · Upcycling-Stange", Lager: "Monat 3 · Lager, auf Anfrage", Online: "Online-Stange · bei der Owner, Versand" };
+const ONLINE_NOTIZ = "Online weiterverkaufen";
 const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
 const STYLES = ["EDGY", "FIERCE", "DREAMY", "AGILE"];
 const BASE_CATS = ["Oberteile", "Hosen", "Röcke", "Kleider", "Jacken", "Schuhe", "Taschen", "Accessoires"];
@@ -29,7 +30,7 @@ const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 const $ = id => document.getElementById(id);
 let sb = null;
-let ITEMS = [], LOOKS = [], OWNERS = [], RENTALS = [], ANM = [], ANFRAGEN = [], URLS = {};
+let ITEMS = [], LOOKS = [], OWNERS = [], RENTALS = [], ANM = [], ANFRAGEN = [], KOMBIS = [], URLS = {};
 let cat = "Alle", lastAdded = null, started = false, lastLoad = 0, lastOwner = SELF;
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -220,6 +221,8 @@ async function load() {
   ANM = an.error ? [] : (an.data || []);
   const af = await sb.from("anfragen").select("*").order("created_at", { ascending: false });
   ANFRAGEN = af.error ? [] : (af.data || []);
+  const kb = await sb.from("kombis").select("*");
+  KOMBIS = kb.error ? [] : (kb.data || []);
   const ap = [...new Set(ANM.flatMap(a => a.vermieten_fotos || []))].filter(p => !URLS["anm:" + p]);
   for (let i = 0; i < ap.length; i += 100) {
     const r = await sb.storage.from("anmeldungen").createSignedUrls(ap.slice(i, i + 100), 60 * 60 * 12);
@@ -393,7 +396,7 @@ function statusActions(it) {
   if (["Entwurf", "Verfügbar", "Reserviert"].includes(s)) {
     out.push(`<button class="btn primary" type="button" data-act="sell">Verkauft …</button>`);
     out.push(s === "Reserviert" ? `<button class="btn" type="button" data-act="setstatus" data-v="Verfügbar">Reservierung aufheben</button>` : `<button class="btn" type="button" data-act="setstatus" data-v="Reserviert">Reservieren</button>`);
-    out.push(`<button class="btn" type="button" data-act="rent">Vermieten …</button>`);
+    if (it.stufe !== "Online") out.push(`<button class="btn" type="button" data-act="rent">Vermieten …</button>`);
     if (s === "Entwurf") out.push(`<button class="btn" type="button" data-act="setstatus" data-v="Verfügbar">Verfügbar machen</button>`);
   }
   if (s === "Vermietet") out.push(`<button class="btn primary" type="button" data-act="returned">Zurück erhalten</button>`);
@@ -425,6 +428,42 @@ function phaseBlock(it) {
     else acts = `<button class="btn" type="button" data-act="tolager">Ins Lager</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
   }
     return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Runde</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
+}
+function onlineBlock(it) {
+  if (it.stufe !== "Online" || it.status !== "Verfügbar") return "";
+  const o = ownerOf(it.owner_id) || {};
+  return `<div class="box"><div class="sec" style="margin:0 0 6px">Online-Stange</div>
+    <p class="pline">Das Teil ist bei <b>${esc(o.profilname || it.owner_id)}</b> zu Hause. Kommt eine Anfrage: Owner kontaktieren, Verfügbarkeit prüfen, Kundin zahlt per Twint an Frankly, Owner verschickt. Danach «Verkauft …» erfassen.</p>
+    <p class="hint">${esc([o.voller_name, o.email, o.telefon].filter(Boolean).join(" · ") || "Keine Kontaktdaten gespeichert")}</p>
+    <div class="rowsmall"><button class="btn" type="button" data-act="setstatus" data-v="Zurückgegeben">Nicht mehr verfügbar</button></div></div>`;
+}
+/* Kombis: Teile, die zusammenpassen (beidseitig) */
+function kombiIds(id) { return KOMBIS.filter(k => k.item_a === id || k.item_b === id).map(k => k.item_a === id ? k.item_b : k.item_a); }
+function kombiBlock(it) {
+  const ids = kombiIds(it.id);
+  return `<div class="sec">Passt zu <span class="hint">· erscheint im Shop als «Kombiniere mit»</span></div>
+    ${ids.length ? `<div class="thumbs">${ids.map(id => { const x = ITEMS.find(y => y.id === id); return x ? `<span class="kombi"><button class="mini" type="button" data-item="${esc(id)}">${imgUrl(x.foto_pfad) ? `<img src="${esc(imgUrl(x.foto_pfad))}" alt="">` : ""}${esc(x.nr)} ${esc(x.titel)}</button><button class="btn ghost" type="button" data-kombidel="${esc(id)}" aria-label="Kombi entfernen">✕</button></span>` : ""; }).join("")}</div>` : `<p class="hint">Noch keine Kombis.</p>`}
+    <div class="kombiadd"><input class="search" id="kombiQ" type="search" placeholder="Teil suchen und verknüpfen: Nummer, Titel, Farbe …" aria-label="Teil für Kombi suchen"><div class="thumbs" id="kombiHits"></div></div>`;
+}
+function kombiSearch(it) {
+  const q = ($("kombiQ").value || "").trim().toLowerCase(), have = new Set(kombiIds(it.id).concat(it.id));
+  const hits = !q ? [] : ITEMS.filter(x => !have.has(x.id) && !CLOSED.includes(x.status) && [x.nr, x.titel, x.farben, x.kategorie, x.marke].join(" ").toLowerCase().includes(q)).slice(0, 12);
+  $("kombiHits").innerHTML = hits.map(x => `<button class="mini" type="button" data-kombiadd="${esc(x.id)}">${imgUrl(x.foto_pfad) ? `<img src="${esc(imgUrl(x.foto_pfad))}" alt="">` : ""}+ ${esc(x.nr)} ${esc(x.titel)}</button>`).join("") || (q ? `<span class="hint">Nichts gefunden.</span>` : "");
+}
+async function kombiAdd(otherId, btn) {
+  const id = panelState && panelState.id; if (!id) return;
+  const row = id < otherId ? { item_a: id, item_b: otherId } : { item_a: otherId, item_b: id };
+  busy(btn, true, "…");
+  const { error } = await sb.from("kombis").insert(row);
+  if (error) { busy(btn, false); return toast(/kombis/.test(error.message || "") ? "Bitte zuerst 09_kombis_online.sql ausführen." : nice(error), 4500); }
+  KOMBIS.push(row); showItem(id); toast("Kombi gespeichert");
+}
+async function kombiDel(otherId) {
+  const id = panelState && panelState.id; if (!id) return;
+  const a = id < otherId ? id : otherId, b = id < otherId ? otherId : id;
+  const { error } = await sb.from("kombis").delete().eq("item_a", a).eq("item_b", b);
+  if (error) return toast(nice(error), 4500);
+  KOMBIS = KOMBIS.filter(k => !(k.item_a === a && k.item_b === b)); showItem(id);
 }
 function anfrageBlock(it) {
   const as = ANFRAGEN.filter(a => a.item_id === it.id);
@@ -474,6 +513,7 @@ function showItem(id, editing) {
         <div class="rowsmall">${statusActions(it)}</div>
         <div id="act"></div>
         ${anfrageBlock(it)}
+        ${onlineBlock(it)}
         ${phaseBlock(it)}
         ${saleBlock(it)}
         ${rentalBlock(it)}
@@ -487,6 +527,7 @@ function showItem(id, editing) {
           <button class="btn" type="button" data-edit="${esc(id)}">Bearbeiten</button>
           <button class="btn danger" type="button" data-del="${esc(id)}">Löschen</button>
         </div>
+        ${kombiBlock(it)}
         <div class="sec">In Looks</div>
         ${ls.length ? `<div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.style || "")} · ${esc(l.name)}</button>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
         <div class="tech">Feste ID (ändert sich nie, auch wenn die Anzeigenummer wechselt):<br>${esc(it.id)}</div>
@@ -494,6 +535,7 @@ function showItem(id, editing) {
     </div>`, { type: "item", id });
   const rep = $("rep-lib");
   rep.addEventListener("change", () => { if (rep.files[0]) replacePhoto(id, rep.files[0]); });
+  const kq = $("kombiQ"); if (kq) kq.addEventListener("input", () => kombiSearch(it));
 }
 
 function showItemEdit(id) {
@@ -671,10 +713,12 @@ function openAction(kind, it) {
   if (kind === "takeback") {
     actForm(`<div class="sec" style="margin:0">Zurücknehmen · Abholung am Samstag</div>
       <label>Abhol-Samstag<select id="a-datum">${satOptions()}</select></label>
+      ${it.stufe && it.stufe !== "Stange" ? `<label class="check"><input id="a-online" type="checkbox"> Danach online weiterverkaufen (Owner bewahrt es auf und verschickt es)</label>` : ""}
       <div class="rowsmall"><button class="btn primary" type="submit">Abholung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const btn = e.submitter; busy(btn, true);
-      const ok = await patchItem(it.id, { entscheid: "Zurücknehmen", entscheid_datum: $("a-datum").value, entscheid_von: "Team" }, "Abholung gespeichert");
+      const online = $("a-online") && $("a-online").checked;
+      const ok = await patchItem(it.id, { entscheid: "Zurücknehmen", entscheid_datum: $("a-datum").value, entscheid_notiz: online ? ONLINE_NOTIZ : null, entscheid_von: "Team" }, "Abholung gespeichert");
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
@@ -713,6 +757,7 @@ async function runAct(kind, btn) {
   if (kind === "done") {
     busy(btn, true);
     let patch = { status: "Zurückgegeben" }, msg = `${it.nr} abgeholt`;
+    if (it.entscheid === "Zurücknehmen" && it.entscheid_notiz === ONLINE_NOTIZ) { patch = { stufe: "Online", status: "Verfügbar", phase_monat: null, entscheid: null, entscheid_datum: null, entscheid_notiz: null }; msg = `${it.nr} abgeholt und jetzt auf der Online-Stange`; }
     if (it.entscheid === "Upcycling") { patch = { stufe: "Upcycling", phase_monat: nextPhase(it.phase_monat), entscheid: null, entscheid_datum: null, entscheid_notiz: null, status: "Verfügbar" }; msg = `${it.nr} hängt jetzt an der Upcycling-Stange. Preis bei Bedarf unter «Bearbeiten» anpassen.`; }
     if (it.entscheid === "Spenden") { patch = { status: "Gespendet" }; msg = `${it.nr} gespendet`; }
     const ok = await patchItem(id, patch, msg); if (ok) showItem(id); else busy(btn, false); return;
@@ -1273,6 +1318,8 @@ document.addEventListener("click", e => {
   if (d.omail) return ownerMail(ownerOf(d.omail));
   if (d.otoken) return newToken(d.otoken, b);
   if (d.anfdone) return anfrageDone(d.anfdone, b);
+  if (d.kombiadd) return kombiAdd(d.kombiadd, b);
+  if (d.kombidel) return kombiDel(d.kombidel);
   if (d.oedit) return ownerForm(ownerOf(d.oedit));
   if (d.odel) return deleteOwner(d.odel, b);
   if (d.owner) return showOwner(d.owner);

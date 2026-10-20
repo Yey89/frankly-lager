@@ -14,15 +14,16 @@ const STUFE = {
   Stange: "An der Stange",
   Reduziert: "An der Reduziert-Stange",
   Upcycling: "An der Upcycling-Stange",
-  Lager: "Im Lager · online auf Anfrage"
+  Lager: "Im Lager · online auf Anfrage",
+  Online: "Online-Stange · bei dir zu Hause"
 };
 const WAHL = {
   Stange: ["Preis senken", "Upcycling", "Zurücknehmen"],
-  Reduziert: ["Lager", "Zurücknehmen", "Spenden"],
-  Upcycling: ["Lager", "Zurücknehmen", "Spenden"],
-  Lager: ["Zurücknehmen", "Spenden"]
+  Reduziert: ["Lager", "Online", "Zurücknehmen", "Spenden"],
+  Upcycling: ["Lager", "Online", "Zurücknehmen", "Spenden"],
+  Lager: ["Online", "Zurücknehmen", "Spenden"]
 };
-const WAHL_TXT = { "Preis senken": "Preis senken", Upcycling: "Upcyceln", Zurücknehmen: "Zurücknehmen", Lager: "Ins Lager", Spenden: "Spenden" };
+const WAHL_TXT = { "Preis senken": "Preis senken", Upcycling: "Upcyceln", Zurücknehmen: "Zurücknehmen", Lager: "Ins Lager", Online: "Online weiterverkaufen", Spenden: "Spenden" };
 
 let sb = null, TOKEN = null, DATA = null, URLS = {}, open = {};
 
@@ -89,7 +90,9 @@ function stateLine(it) {
   if (it.status === "Reserviert") return `<b>Reserviert</b> für eine Kundin`;
   if (it.status === "Zurückgegeben") return `Zurück bei dir`;
   if (it.status === "Gespendet") return `Gespendet. Danke!`;
+  if (it.entscheid === "Zurücknehmen" && it.entscheid_notiz === "Online weiterverkaufen") return `<b>Abholung</b> am ${esc(fmt(it.entscheid_datum))}, danach auf der Online-Stange`;
   if (it.entscheid === "Zurücknehmen") return `<b>Abholung</b> am ${esc(fmt(it.entscheid_datum))} im Laden`;
+  if (it.stufe === "Online") return `<b>Online-Stange:</b> Das Teil ist bei dir. Bitte bewahre es separat auf. Wird es gekauft, melden wir uns, und du verschickst es innert 3 Tagen.<br><button class="btn" type="button" data-online-ende="${esc(it.id)}">Nicht mehr verfügbar</button>`;
   if (it.entscheid === "Spenden") return `<b>Wird gespendet</b>`;
   if (it.entscheid === "Upcycling") return it.entscheid_datum ? `<b>Upcycling</b> mit dir am ${esc(fmt(it.entscheid_datum))}` : `<b>Upcycling</b> durch das Team im Josy`;
   const s = STUFE[it.stufe] || "Im Laden";
@@ -144,6 +147,10 @@ function decideForm(it, w) {
     <p class="dnote">Du holst dein Teil an einem Samstag im Laden ab.</p>
     <label>Abholung am<select id="d-tag-${id}">${satOptions()}</select></label>`;
   if (w === "Lager") body = `<p class="dnote">Dein Teil kommt für ${esc(nextRound(it))} ins Lager. Im Online-Shop bleibt es sichtbar mit «Auf Anfrage». Wer es anprobieren möchte, meldet sich bei uns.</p>`;
+  if (w === "Online") body = `
+    <p class="dnote">Du holst dein Teil an einem Samstag ab. Es bleibt aber im Online-Shop mit dem Hinweis «Versand durch Owner». Kaufanfragen kommen zu Frankly. Wir melden uns bei dir, du verschickst das Teil, und du bekommst 90 % wie bisher.</p>
+    <label>Abholung am<select id="d-tag-${id}">${satOptions()}</select></label>
+    <div class="radios"><label><input type="checkbox" id="d-ok-${id}"> Ich bewahre das Teil separat auf (nicht im eigenen Kleiderschrank), verschicke es innert 3 Tagen, wenn es gekauft wird, und melde hier, wenn ich es nicht mehr habe.</label></div>`;
   if (w === "Spenden") body = `<p class="dnote">Wir geben dein Teil an eine gemeinnützige Stelle in Zürich weiter. Das kannst du danach nicht mehr ändern.</p>`;
   return `<form class="dform" data-form="${id}" novalidate>${body}<div class="rowsmall"><button class="btn primary" type="submit">${esc(w === "Spenden" ? "Ja, spenden" : "Entscheid speichern")}</button></div></form>`;
 }
@@ -162,6 +169,10 @@ async function submitDecision(id, btn) {
     if (args.p_notiz === "Selbst upcyceln") args.p_datum = $("d-tag-" + id).value;
   }
   if (w === "Zurücknehmen") args.p_datum = $("d-tag-" + id).value;
+  if (w === "Online") {
+    if (!$("d-ok-" + id).checked) return toast("Bitte bestätige, dass du das Teil separat aufbewahrst und verschickst.");
+    args.p_datum = $("d-tag-" + id).value;
+  }
   btn.disabled = true; btn.textContent = "Wird gespeichert …";
   const { data, error } = await sb.rpc("owner_entscheid", args);
   if (error) { btn.disabled = false; btn.textContent = "Entscheid speichern"; return toast(niceErr(error), 5000); }
@@ -200,7 +211,7 @@ function render() {
         <li><b>Monat 1:</b> Dein Teil hängt zu deinem Preis an der Stange. Eine Runde geht vom ersten bis zum letzten Samstag im Monat.</li>
         <li><b>Monat 2:</b> Ist es nicht verkauft, wählst du: Preis senken (Reduziert-Stange), upcyceln (Upcycling-Stange) oder zurücknehmen.</li>
         <li><b>Monat 3:</b> Dein Teil kommt ins Lager und bleibt online sichtbar. Oder du nimmst es zurück oder spendest es.</li>
-        <li><b>Danach</b> holst du es an einem Samstag ab oder spendest es.</li>
+        <li><b>Danach</b> holst du es an einem Samstag ab oder spendest es. Oder du verkaufst es auf der <b>Online-Stange</b> weiter: Es bleibt im Online-Shop, und du verschickst es, wenn jemand es kauft.</li>
       </ol>
     </div>`;
 }
@@ -214,6 +225,14 @@ document.addEventListener("change", e => {
   if (r) { open[r.dataset.wahl] = r.value; const it = DATA.items.find(x => x.id === r.dataset.wahl); const box = document.querySelector(`#row-${CSS.escape(it.id)} .decide`); if (box) box.outerHTML = decideBox(it); const f = document.querySelector(`[data-form="${CSS.escape(it.id)}"] input, [data-form="${CSS.escape(it.id)}"] select`); if (f) f.focus({ preventScroll: true }); return; }
   const w = e.target.closest("input[name^='d-wer-']");
   if (w) { const id = w.name.slice(6), wrap = $("d-tag-wrap-" + id); if (wrap) wrap.hidden = w.value !== "Selbst upcyceln"; }
+});
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-online-ende]"); if (!b) return;
+  if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Sicher? Nochmals tippen"; return; }
+  b.disabled = true;
+  const { data, error } = await sb.rpc("owner_online_ende", { p_token: TOKEN, p_item: b.dataset.onlineEnde });
+  if (error) { b.disabled = false; return toast(niceErr(error), 5000); }
+  DATA = data; render(); toast("Danke, das Teil ist jetzt nicht mehr online.");
 });
 document.addEventListener("submit", e => {
   const f = e.target.closest("form[data-form]"); if (!f) return;

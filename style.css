@@ -219,3 +219,7 @@ label.check input{width:auto;margin-top:3px}
 .istudien{margin:0 0 10px;padding-left:18px;display:grid;gap:8px;line-height:1.45;max-width:80ch}
 #liebForm{margin-top:12px;max-width:640px}
 .istudien a{color:var(--ink)}
+
+.kombi{display:inline-flex;align-items:center;gap:2px}
+.kombiadd{display:grid;gap:8px;margin-top:10px}
+.kombiadd .search{width:100%}

@@ -26,10 +26,10 @@ const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "A
 
 const CFG = window.FRANKLY_CONFIG;
 const $ = id => document.getElementById(id);
-let sb = null, ITEMS = [], OWNERS = [], LOOKS = [], RENT = {}, URLS = {}, cat = "Alle";
+let sb = null, ITEMS = [], OWNERS = [], LOOKS = [], RENT = {}, KOMBIS = [], URLS = {}, cat = "Alle";
 const SZ = window.FRANKLY_SIZES;
 const SEL_KEY = "frankly-groessen";
-let SEL = loadSel(), TMP = null;
+let SEL = loadSel(), TMP = null, SHOWALL = false;
 function loadSel() { try { const v = JSON.parse(localStorage.getItem(SEL_KEY) || "null"); return v && v.oben ? v : null; } catch (e) { return null; } }
 function saveSel() { try { localStorage.setItem(SEL_KEY, JSON.stringify(SEL)); } catch (e) {} }
 
@@ -58,6 +58,7 @@ function badge(it) {
   if (it.status === "Reserviert") return `<span class="pill">Reserviert</span>`;
   if (it.status === "Vermietet") return `<span class="pill muted">${esc(rentText(it))}</span>`;
   if (it.stufe === "Lager") return `<span class="pill">Auf Anfrage</span>`;
+  if (it.stufe === "Online") return `<span class="pill">Versand durch Owner</span>`;
   if (it.stufe === "Reduziert") return `<span class="pill sold">Reduziert</span>`;
   return "";
 }
@@ -95,6 +96,8 @@ async function load() {
     const r = await sb.from("vermietungen").select("item_id,von,bis,zurueck_am").is("zurueck_am", null);
     (r.data || []).forEach(x => { const cur = RENT[x.item_id]; if (!cur || String(x.von) > String(cur.von)) RENT[x.item_id] = x; });
   }
+  const kb = await sb.from("kombis").select("item_a,item_b");
+  KOMBIS = kb.error ? [] : (kb.data || []);
   LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length);
 }
 /* Fotos erst nach dem Anzeigen holen: zuerst die kleinen Vorschaubilder, wo keines existiert das Original */
@@ -133,7 +136,7 @@ function renderFilters() {
 }
 function renderGrid() {
   const q = $("q").value.trim().toLowerCase();
-  const list = ITEMS.filter(i => (cat === "Alle" || i.kategorie === cat) && SZ.matches(i, SEL) &&
+  const list = ITEMS.filter(i => (cat === "Alle" || i.kategorie === cat) && (SHOWALL || SZ.matches(i, SEL)) &&
     (!q || [i.nr, i.titel, i.marke, i.farben, i.kategorie, i.unterkategorie, i.groesse, i.material].join(" ").toLowerCase().includes(q)));
   $("grid").innerHTML = !ITEMS.length ? `<p class="empty">Gerade ist nichts online. Komm im Laden vorbei, wir hängen laufend neue Teile auf.</p>`
     : (list.length ? list.map(card).join("") : `<p class="empty">In deiner Grösse ist gerade nichts dabei. Ändere die Grösse oben oder schau bald wieder vorbei.</p>`);
@@ -145,8 +148,10 @@ function selText(g, arr) { return arr.length ? arr.join(", ") : "alle"; }
 function renderSizeBar(n) {
   if (!SEL) { $("sizeBar").hidden = true; return; }
   const all = !SEL.oben.length && !SEL.unten.length && !SEL.schuhe.length;
+  const mine = `Oben <b>${esc(selText("oben", SEL.oben))}</b> · Unten <b>${esc(selText("unten", SEL.unten))}</b> · Schuhe <b>${esc(selText("schuhe", SEL.schuhe))}</b>`;
   $("sizeBar").hidden = false;
-  $("sizeBar").innerHTML = `<span><b>${n}</b> ${n === 1 ? "Teil" : "Teile"} · ${all ? "alle Grössen" : `Oben <b>${esc(selText("oben", SEL.oben))}</b> · Unten <b>${esc(selText("unten", SEL.unten))}</b> · Schuhe <b>${esc(selText("schuhe", SEL.schuhe))}</b>`}</span><button class="btn" type="button" data-szedit>Grösse ändern</button>`;
+  $("sizeBar").innerHTML = `<span><b>${n}</b> ${n === 1 ? "Teil" : "Teile"} · ${all || SHOWALL ? "alle Grössen" : mine}</span>
+    <span class="rowsmall" style="margin:0">${all ? "" : `<button class="btn" type="button" data-szshow aria-pressed="${SHOWALL}">${SHOWALL ? "Nur meine Grösse" : "Alle Grössen zeigen"}</button>`}<button class="btn ghost" type="button" data-szedit>Grösse ändern</button></span>`;
 }
 function chipRow(g, opts, hints) {
   return opts.map(v => `<button class="chip szchip" type="button" data-sz="${g}" data-v="${v}" aria-pressed="${TMP[g].includes(v)}"><b>${v}</b>${hints ? `<small>${esc(hints[v])}</small>` : ""}</button>`).join("");
@@ -214,9 +219,10 @@ function showItem(nr) {
         <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}</div>
         ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? `Dieses Teil ist bis ${esc(shortDate(RENT[it.id].bis))} vermietet und danach wieder im Laden.` : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
         ${it.status === "Reserviert" ? `<p class="hint">Dieses Teil ist für jemanden reserviert.</p>` : ""}
-        ${it.stufe === "Lager" && it.status === "Verfügbar" ? anfrageBox(it) : ""}
+        ${(it.stufe === "Lager" || it.stufe === "Online") && it.status === "Verfügbar" ? anfrageBox(it) : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
+        ${kombiSection(it)}
         ${ls.length ? `<div class="sec">Steckt in diesen Looks</div><div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.style || "")} · ${esc(l.name)}</button>`).join("")}</div>` : ""}
         ${visitBox()}
         <div class="rowsmall"><button class="btn" type="button" data-share="${esc(it.nr)}">Link kopieren</button></div>
@@ -224,17 +230,24 @@ function showItem(nr) {
     </div>`);
   ensureBig(it.foto_pfad);
 }
-/* Teile im Lager: Anprobe anfragen */
+/* Kombiniere mit: Teile, die im Lager verknüpft wurden */
+function kombiSection(it) {
+  const ids = KOMBIS.filter(k => k.item_a === it.id || k.item_b === it.id).map(k => k.item_a === it.id ? k.item_b : k.item_a);
+  const its = ids.map(id => ITEMS.find(x => x.id === id)).filter(Boolean);
+  return its.length ? `<div class="sec">Kombiniere mit</div><div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${its.map(card).join("")}</div>` : "";
+}
+/* Teile im Lager oder auf der Online-Stange: anfragen */
 function anfrageBox(it) {
-  return `<div class="box"><span class="klabel">Auf Anfrage</span>
-    <p class="pline">Dieses Teil hängt gerade nicht im Laden, sondern im Lager. Schreib uns, dann legen wir es für deinen Besuch bereit.</p>
+  const online = it.stufe === "Online";
+  return `<div class="box"><span class="klabel">${online ? "Versand durch Owner" : "Auf Anfrage"}</span>
+    <p class="pline">${online ? "Dieses Teil ist nicht mehr bei uns im Laden, sondern zurück bei der Owner. Schick uns eine Anfrage: Wir prüfen, ob es noch erhältlich ist, und melden uns mit dem Preis inklusive Versand." : "Dieses Teil hängt gerade nicht im Laden, sondern im Lager. Schreib uns, dann legen wir es für deinen Besuch bereit."}</p>
     <form class="form anfform" id="anfForm" data-anf="${esc(it.id)}" novalidate>
       <label>Dein Name *<input id="a-name" autocomplete="name" maxlength="120"></label>
       <label>E-Mail oder Telefon *<input id="a-kontakt" autocomplete="email" maxlength="160"></label>
-      <label>Wann kommst du vorbei? (freiwillig)<input id="a-msg" maxlength="500" placeholder="z.B. Samstag Vormittag"></label>
+      <label>${online ? "Nachricht (freiwillig)" : "Wann kommst du vorbei? (freiwillig)"}<input id="a-msg" maxlength="500" placeholder="${online ? "z.B. Lieferadresse in Zürich" : "z.B. Samstag Vormittag"}"></label>
       <label class="hp" aria-hidden="true">Website<input id="a-website" tabindex="-1" autocomplete="off"></label>
       <p class="err" id="a-err" aria-live="polite"></p>
-      <button class="btn primary" type="submit" id="a-btn">Anprobe anfragen</button>
+      <button class="btn primary" type="submit" id="a-btn">${online ? "Verfügbarkeit anfragen" : "Anprobe anfragen"}</button>
     </form>
     <p class="lead" id="a-done" hidden>Danke! Wir melden uns bei dir.</p></div>`;
 }
@@ -388,7 +401,8 @@ document.addEventListener("click", e => {
   if (d.sz) { const arr = TMP[d.sz], on = !arr.includes(d.v); if (on) arr.push(d.v); else arr.splice(arr.indexOf(d.v), 1); b.setAttribute("aria-pressed", on); return; }
   if (d.szgo !== undefined) return applySel(false);
   if (d.szall !== undefined) return applySel(true);
-  if (d.szedit !== undefined) return showPicker();
+  if (d.szedit !== undefined) { SHOWALL = false; return showPicker(); }
+  if (d.szshow !== undefined) { SHOWALL = !SHOWALL; return renderGrid(); }
   if (d.item) return showItem(d.item);
   if (d.look) return showLook(d.look);
   if (d.owner) return showOwner(d.owner);
