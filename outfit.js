@@ -26,6 +26,7 @@ window.FRANKLY_OUTFIT = (() => {
     for (const [s, re] of KW) if (re.test(t)) return (c === "top" && !["outer", "dress"].includes(s)) ? "top" : s;
     return c || "top";
   }
+  const SHIRTDRESS = /hemd|shirt|longshirt|tunika|tunic|bluse/i;
   function groups(items) {
     const g = { top: [], bottom: [], dress: [], outer: [], shoes: [], bag: [], acc: [] };
     items.forEach(it => g[slot(it)].push(it));
@@ -35,6 +36,8 @@ window.FRANKLY_OUTFIT = (() => {
   function bases(g) {
     const b = [];
     if (g.top.length && g.bottom.length) g.top.forEach(t => g.bottom.forEach(u => b.push([t, u])));
+    /* Hemdblusenkleid / Longshirt kann man auch über Hose oder Shorts tragen */
+    g.dress.filter(d => SHIRTDRESS.test([d.unterkategorie, d.titel].join(" "))).forEach(d => g.bottom.forEach(u => b.push([d, u])));
     g.dress.forEach(d => b.push([d]));
     if (!b.length) g.top.concat(g.bottom).forEach(x => b.push([x]));
     if (!b.length && g.outer.length) b.push([]);
@@ -66,16 +69,36 @@ window.FRANKLY_OUTFIT = (() => {
     }
     return best || first(items);
   }
-  /* Bild bauen. url(it) liefert {src, cut}: cut = freigestellt (durchsichtiger Hintergrund) */
+  /* Bild bauen: jedes Teil bekommt einen eigenen Platz, nichts überlappt.
+     url(it) liefert {src, cut}: cut = freigestellt (durchsichtiger Hintergrund) */
+  function places(combo) {
+    const g = groups(combo), P = new Map();
+    const set = (it, l, t, w, h) => { if (it) P.set(it.id, [l, t, w, h]); };
+    const dressUp = g.bottom.length ? g.dress : [];          // Kleid über Hose = wie Oberteil
+    const upper = g.outer.concat(g.top, dressUp);
+    if (g.dress.length && !g.bottom.length) {                  // Kleid
+      if (g.outer.length) { set(g.outer[0], 2, 2, 46, 60); set(g.dress[0], 50, 2, 48, 96); }
+      else set(g.dress[0], 16, 2, 68, 96);
+    } else if (g.bottom.length) {                              // oben + unten
+      if (upper.length >= 2) { set(upper[0], 2, 2, 47, 47); set(upper[1], 51, 2, 47, 47); }
+      else if (upper.length === 1) set(upper[0], 20, 2, 60, 47);
+      set(g.bottom[0], 22, upper.length ? 51 : 4, 56, upper.length ? 47 : 92);
+    } else {                                                   // nur Oberteile / Jacke
+      if (upper.length >= 2) { set(upper[0], 2, 8, 47, 72); set(upper[1], 51, 8, 47, 72); }
+      else if (upper.length === 1) set(upper[0], 15, 6, 70, 82);
+    }
+    set(g.shoes[0], 80, 79, 18, 19);
+    set(g.bag[0], 2, 52, 18, 26);
+    set(g.acc[0], 2, 80, 18, 18);
+    return P;
+  }
   function html(combo, url, label) {
-    const g = groups(combo);
-    const cls = ["outfit", g.outer.length ? "has-outer" : "", g.dress.length ? "has-dress" : "",
-      g.top.length && !g.bottom.length && !g.dress.length ? "only-top" : "", g.bottom.length && !g.top.length ? "only-bottom" : ""].filter(Boolean).join(" ");
+    const P = places(combo);
     const imgs = combo.map(it => {
-      const u = url(it); if (!u || !u.src) return "";
-      return `<img class="o-${slot(it)}${u.cut ? "" : " raw"}" src="${String(u.src).replace(/"/g, "&quot;")}" alt="" loading="lazy" decoding="async">`;
+      const u = url(it), p = P.get(it.id); if (!u || !u.src || !p) return "";
+      return `<img class="o-${slot(it)}${u.cut ? "" : " raw"}" style="left:${p[0]}%;top:${p[1]}%;width:${p[2]}%;height:${p[3]}%" src="${String(u.src).replace(/"/g, "&quot;")}" alt="" loading="lazy" decoding="async">`;
     }).join("");
-    return `<span class="${cls}" role="img" aria-label="${String(label || "Outfit").replace(/"/g, "&quot;")}">${imgs || `<span class="nofoto">Fotos fehlen</span>`}</span>`;
+    return `<span class="outfit" role="img" aria-label="${String(label || "Outfit").replace(/"/g, "&quot;")}">${imgs || `<span class="nofoto">Fotos fehlen</span>`}</span>`;
   }
   return { slot, groups, count, first, shuffle, html };
 })();

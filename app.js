@@ -81,11 +81,30 @@ function collage(l) {
 /* Looks im Teil: anzeigen, hinzufügen, entfernen */
 function lookBlock(it) {
   const ls = looksOf(it.id), others = LOOKS.filter(l => !l.items.includes(it.id));
-  return `<div class="sec">Looks mit diesem Teil <span class="hint">· im Shop unter Looks und «Kombiniere mit»</span></div>
-    ${ls.length ? `<div class="thumbs">${ls.map(l => `<span class="kombi"><button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)} (${l.items.length})</button><button class="btn ghost" type="button" data-lookrm="${esc(l.id)}" aria-label="Aus Look entfernen">✕</button></span>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
-    <div class="rowsmall"><select class="search" id="lookSel" aria-label="Look wählen"><option value="neu">+ Neuer Look</option>${others.map(l => `<option value="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)}</option>`).join("")}</select>
-    <span id="lookNameWrap"><input class="search" id="lookName" placeholder="Name, z.B. Denim x Sheer (freiwillig)" aria-label="Name des neuen Looks"></span>
-    <button class="btn" type="button" data-lookadd="${esc(it.id)}">Zu Look hinzufügen</button></div>`;
+  const opt = l => `<option value="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)}</option>`;
+  return `<div class="sec">Looks mit diesem Teil <span class="hint">· im Shop unter Looks</span></div>
+    ${ls.length ? `<div class="thumbs">${ls.map(l => `<span class="kombi"><button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)} (${l.items.length} ${l.items.length === 1 ? "Teil" : "Teile"})</button><button class="btn ghost" type="button" data-lookrm="${esc(l.id)}" aria-label="Aus Look entfernen">✕</button></span>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
+    <div class="box" style="margin-top:8px">
+      <label>1. In welchen Look?<select class="search" id="lookSel" style="width:100%;max-width:100%">${ls.map(opt).join("")}<option value="neu">+ Neuer Look</option>${others.map(opt).join("")}</select></label>
+      <span id="lookNameWrap" ${ls.length ? "hidden" : ""}><input class="search" id="lookName" style="width:100%;margin-top:6px" placeholder="Name des neuen Looks (freiwillig)" aria-label="Name des neuen Looks"></span>
+      <label style="margin-top:8px">2. Kombinieren mit: Teil suchen und antippen<input class="search" id="lookWith" type="search" style="width:100%" placeholder="Nummer, Titel, Farbe … z.B. Denim oder 7"></label>
+      <div class="thumbs" id="lookWithHits"></div>
+      <p class="hint">Beide Teile kommen in den gewählten Look. Bei «Neuer Look» entsteht eine neue Nummer.</p>
+      ${others.length ? `<div class="rowsmall"><button class="btn" type="button" data-lookadd="${esc(it.id)}">Nur dieses Teil zum Look hinzufügen</button></div>` : ""}
+    </div>`;
+}
+function lookWithSearch(it) {
+  const raw = ($("lookWith").value || "").trim().toLowerCase(), q = /^\d+$/.test(raw) ? "fr-" + raw.padStart(6, "0") : raw;
+  const hits = !q ? [] : ITEMS.filter(x => x.id !== it.id && !CLOSED.includes(x.status) && [x.nr, x.titel, x.farben, x.kategorie, x.unterkategorie, x.marke].join(" ").toLowerCase().includes(q)).slice(0, 12);
+  $("lookWithHits").innerHTML = hits.map(x => `<button class="mini" type="button" data-lookwith="${esc(x.id)}">${imgUrl(x.foto_pfad) ? `<img src="${esc(imgUrl(x.foto_pfad))}" alt="">` : ""}+ ${esc(x.nr)} ${esc(x.titel)}</button>`).join("") || (q ? `<span class="hint">Nichts gefunden.</span>` : "");
+}
+async function combineWith(it, otherId, btn) {
+  const sel = $("lookSel").value, other = ITEMS.find(x => x.id === otherId);
+  const name = val("lookName") || [it.titel, other && other.titel].filter(Boolean).join(" + ");
+  const lid = await addToLook(it.id, sel === "neu" ? null : sel, name, btn);
+  if (!lid) return;
+  await addToLook(otherId, lid, null, null);
+  showItem(it.id);
 }
 async function addToLook(itemId, lookId, name, btn) {
   if (btn) busy(btn, true, "…");
@@ -632,6 +651,7 @@ function showItem(id, editing) {
   rep.addEventListener("change", () => { if (rep.files[0]) replacePhoto(id, rep.files[0]); });
   const kq = $("kombiQ"); if (kq) kq.addEventListener("input", () => kombiSearch(it));
   const ln = $("lookSel"); if (ln) ln.addEventListener("change", () => { $("lookNameWrap").hidden = ln.value !== "neu"; });
+  const lw = $("lookWith"); if (lw) lw.addEventListener("input", () => lookWithSearch(it));
   const xf = $("xfile"); if (xf) xf.addEventListener("change", () => { if (xf.files[0]) addExtraFoto(id, xf.files[0]); });
 }
 
@@ -1490,6 +1510,7 @@ document.addEventListener("click", e => {
   if (d.otoken) return newToken(d.otoken, b);
   if (d.anfdone) return anfrageDone(d.anfdone, b);
   if (d.kombiadd) return kombiAdd(d.kombiadd, b);
+  if (d.lookwith && panelState) { const cur = ITEMS.find(x => x.id === panelState.id); if (cur) combineWith(cur, d.lookwith, b); return; }
   if (d.lookadd) { const sel = $("lookSel").value; addToLook(d.lookadd, sel === "neu" ? null : sel, val("lookName"), b).then(id => { if (id) showItem(d.lookadd); }); return; }
   if (d.lookrm && panelState) { const iid = panelState.id; removeFromLook(d.lookrm, iid).then(() => showItem(iid)); return; }
   if (d.lookput && panelState) { const lid = panelState.id; addToLook(d.lookput, lid, null, b).then(() => showLook(lid)); return; }

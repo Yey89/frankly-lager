@@ -1,27 +1,6 @@
-/* 0–100 FRANKLY · Outfit-Bild für Looks (outfit.js) */
+/* 0–100 FRANKLY · Outfit-Bild für Looks (outfit.js). Plätze setzt outfit.js direkt. */
 .outfit{position:relative;display:block;width:100%;height:100%;min-height:0;aspect-ratio:3/4;background:#f3f1ec;overflow:hidden;isolation:isolate}
-.outfit img{position:absolute;object-fit:contain;display:block;filter:drop-shadow(0 8px 10px rgba(0,0,0,.16))}
-.outfit img.raw{filter:none;mix-blend-mode:multiply;border-radius:2px}
+.outfit img{position:absolute;object-fit:contain;object-position:center;display:block;filter:drop-shadow(0 6px 8px rgba(0,0,0,.14))}
+.outfit img.raw{filter:none;mix-blend-mode:multiply}
 .outfit .nofoto{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-/* Oberteil + Unterteil */
-.outfit .o-top{left:20%;top:2%;width:60%;height:44%;z-index:2}
-.outfit .o-bottom{left:24%;top:39%;width:52%;height:58%;z-index:1}
-/* mit Jacke: Jacke links, Oberteil rechts */
-.outfit.has-outer .o-outer{left:2%;top:3%;width:54%;height:52%;z-index:3}
-.outfit.has-outer .o-top{left:42%;top:4%;width:52%;height:40%}
-.outfit.has-outer .o-bottom{left:28%;top:40%;width:50%;height:57%}
-/* Kleid */
-.outfit .o-dress{left:18%;top:3%;width:64%;height:84%;z-index:2}
-.outfit.has-outer.has-dress .o-dress{left:36%;top:3%;width:58%;height:84%}
-.outfit.has-outer.has-dress .o-outer{left:2%;top:8%;width:50%;height:52%}
-/* nur ein Grundteil */
-.outfit.only-top .o-top{left:14%;top:8%;width:72%;height:62%}
-.outfit.only-bottom .o-bottom{left:20%;top:6%;width:60%;height:82%}
-.outfit:not(.has-dress):not(:has(.o-top)):not(:has(.o-bottom)) .o-outer{left:14%;top:6%;width:72%;height:70%}
-/* Extras */
-.outfit .o-shoes{left:66%;top:77%;width:31%;height:21%;z-index:4}
-.outfit .o-bag{left:69%;top:46%;width:29%;height:27%;z-index:4}
-.outfit .o-acc{left:3%;top:72%;width:26%;height:24%;z-index:4}
-.outfit.has-outer .o-bag{left:3%;top:58%;width:26%;height:24%}
-.outfit.has-outer .o-acc{left:72%;top:52%;width:25%;height:22%}
 .okombi{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
