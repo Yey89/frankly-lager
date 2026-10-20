@@ -101,7 +101,7 @@ async function load() {
   STREET = fe.error ? [] : (fe.data || []);
   const kb = await sb.from("kombis").select("item_a,item_b");
   KOMBIS = kb.error ? [] : (kb.data || []);
-  LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length);
+  LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length >= 2);
 }
 /* Fotos erst nach dem Anzeigen holen: zuerst die kleinen Vorschaubilder, wo keines existiert das Original */
 async function signPaths(paths) {
@@ -237,21 +237,22 @@ function showStreet(id) {
       </div>
     </div>`);
 }
+function collage(l) {
+  if (l.foto_pfad) return imgTag(l.foto_pfad, l.name);
+  const ps = l.items.map(id => ITEMS.find(x => x.id === id)).filter(Boolean).slice(0, 4);
+  return `<span class="collage n${ps.length}">${ps.map(it => imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="" loading="lazy">` : `<span class="nofoto">${esc(it.nr)}</span>`).join("")}</span>`;
+}
 function renderLooks() {
-  const street = STREET.length ? `<h3 class="osec">Aus der Fotoecke</h3><div class="looks">${STREET.map(streetCard).join("")}</div>` : "";
-  const own = LOOKS.length ? `${street ? `<h3 class="osec">Kombis von Frankly</h3>` : ""}<div class="looks">` + LOOKS.map(l => {
-    const first = ITEMS.find(i => i.id === l.items[0]);
-    return `
+  const own = LOOKS.length ? `<h3 class="osec">Looks von Frankly</h3><div class="looks">` + LOOKS.map(l => `
     <div class="look">
       <button class="card" type="button" data-look="${esc(l.id)}" style="gap:10px">
-        <div class="ph">${imgTag(l.foto_pfad || (first && first.foto_pfad), l.name)}</div>
+        <div class="ph">${collage(l)}</div>
         <span class="style">${esc(l.style || "")}</span>
-        <span class="lname">${esc(l.name)}</span>
+        <span class="lname">${esc(l.name)} · ${l.items.length} Teile</span>
       </button>
-      <div class="thumbs">${l.items.map(id => { const it = ITEMS.find(x => x.id === id); return it ? `<button class="mini" type="button" data-item="${esc(it.nr)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>` : ""; }).join("")}</div>
-    </div>`;
-  }).join("") + `</div>` : "";
-  $("lookGrid").innerHTML = street || own ? street + own : `<p class="empty">Bald gibt es hier Looks zu sehen. Mach mit in der Fotoecke im Laden!</p>`;
+    </div>`).join("") + `</div>` : "";
+  const street = STREET.length ? `<h3 class="osec">Aus der Fotoecke</h3><div class="looks">${STREET.map(streetCard).join("")}</div>` : "";
+  $("lookGrid").innerHTML = own || street ? own + street : `<p class="empty">Bald gibt es hier Looks zu sehen. Mach mit in der Fotoecke im Laden!</p>`;
 }
 
 /* ---------- Panel ---------- */
@@ -291,7 +292,7 @@ function showItem(nr) {
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
         ${kombiSection(it)}
         ${(() => { const fs = STREET.filter(f => streetItems(f).some(x => x.id === it.id)); return fs.length ? `<div class="sec">So wurde es getragen</div><div class="thumbs">${fs.map(f => `<button class="mini" type="button" data-street="${esc(f.id)}">${URLS["fe:" + f.pfad] ? `<img src="${esc(URLS["fe:" + f.pfad])}" alt="">` : ""}${esc(f.name || "Look")}</button>`).join("")}</div>` : ""; })()}
-        ${ls.length ? `<div class="sec">Steckt in diesen Looks</div><div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.style || "")} · ${esc(l.name)}</button>`).join("")}</div>` : ""}
+        ${ls.length ? `<div class="sec">Steckt in diesen Looks</div><div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.name)}</button>`).join("")}</div>` : ""}
         ${visitBox()}
         <div class="rowsmall"><button class="btn" type="button" data-share="${esc(it.nr)}">Link kopieren</button></div>
       </div>
@@ -300,7 +301,7 @@ function showItem(nr) {
 }
 /* Kombiniere mit: Teile, die im Lager verknüpft wurden */
 function kombiSection(it) {
-  const ids = KOMBIS.filter(k => k.item_a === it.id || k.item_b === it.id).map(k => k.item_a === it.id ? k.item_b : k.item_a);
+  const ids = [...new Set(LOOKS.filter(l => l.items.includes(it.id)).flatMap(l => l.items).concat(KOMBIS.filter(k => k.item_a === it.id || k.item_b === it.id).map(k => k.item_a === it.id ? k.item_b : k.item_a)))].filter(id => id !== it.id);
   const its = ids.map(id => ITEMS.find(x => x.id === id)).filter(Boolean);
   return its.length ? `<div class="sec">Kombiniere mit</div><div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${its.map(card).join("")}</div>` : "";
 }
@@ -348,7 +349,7 @@ function showLook(id) {
   openPanel(`
     <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
-      <div class="big">${imgTag(l.foto_pfad || (first && first.foto_pfad), l.name)}</div>
+      <div class="big">${collage(l)}</div>
       <div>
         <div class="style">${esc(l.style || "")}</div>
         <h2 class="dt" style="margin-top:4px">${esc(l.name)}</h2>

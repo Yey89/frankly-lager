@@ -234,3 +234,9 @@ label.check input{width:auto;margin-top:3px}
 .fcard{border:1px solid var(--line);background:var(--surface);display:grid;gap:8px;padding:10px;align-content:start}
 .fcard img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:var(--bg)}
 .fcard .pill{margin-right:4px}
+
+.collage{display:grid;width:100%;height:100%;gap:2px;background:var(--line)}
+.collage.n2{grid-template-columns:1fr 1fr}
+.collage.n3,.collage.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.collage.n3 > :first-child{grid-row:span 2}
+.collage img,.collage .nofoto{width:100%;height:100%;object-fit:cover;display:block;min-height:0}

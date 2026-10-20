@@ -65,6 +65,61 @@ function sizePreview(txt, kat) {
   if (!s.length) return "Im Shop: Grösse nicht erkannt, wird allen gezeigt. Tipp: z.B. M, 38 oder W28";
   return "Im Shop als: " + s.join(" / ");
 }
+function collage(l, big) {
+  if (l.foto_pfad) return imgTag(l.foto_pfad, l.name, big);
+  const ps = l.items.map(id => ITEMS.find(x => x.id === id)).filter(Boolean).slice(0, 4);
+  if (!ps.length) return `<span class="nofoto">Noch keine Teile</span>`;
+  return `<span class="collage n${ps.length}">${ps.map(it => imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : `<span class="nofoto">${esc(it.nr)}</span>`).join("")}</span>`;
+}
+/* Looks im Teil: anzeigen, hinzufügen, entfernen */
+function lookBlock(it) {
+  const ls = looksOf(it.id), others = LOOKS.filter(l => !l.items.includes(it.id));
+  return `<div class="sec">Looks mit diesem Teil <span class="hint">· im Shop unter Looks und «Kombiniere mit»</span></div>
+    ${ls.length ? `<div class="thumbs">${ls.map(l => `<span class="kombi"><button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)} (${l.items.length})</button><button class="btn ghost" type="button" data-lookrm="${esc(l.id)}" aria-label="Aus Look entfernen">✕</button></span>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
+    <div class="rowsmall"><select class="search" id="lookSel" aria-label="Look wählen"><option value="neu">+ Neuer Look</option>${others.map(l => `<option value="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)}</option>`).join("")}</select>
+    <span id="lookNameWrap"><input class="search" id="lookName" placeholder="Name, z.B. Denim x Sheer (freiwillig)" aria-label="Name des neuen Looks"></span>
+    <button class="btn" type="button" data-lookadd="${esc(it.id)}">Zu Look hinzufügen</button></div>`;
+}
+async function addToLook(itemId, lookId, name, btn) {
+  if (btn) busy(btn, true, "…");
+  try {
+    let l = LOOKS.find(x => x.id === lookId);
+    if (!l) {
+      const ins = await sb.from("looks").insert({ name: name || ("Look " + ((ITEMS.find(x => x.id === itemId) || {}).titel || "")).trim(), status: "Aktiv" }).select().single();
+      if (ins.error) throw ins.error;
+      l = Object.assign({}, ins.data, { items: [] }); LOOKS = LOOKS.concat(l);
+    }
+    if (!l.items.includes(itemId)) {
+      const { error } = await sb.from("look_items").insert({ look_id: l.id, item_id: itemId, position: l.items.length + 1 });
+      if (error) throw error;
+      LOOKS = LOOKS.map(x => x.id === l.id ? Object.assign({}, x, { items: x.items.concat(itemId) }) : x);
+    }
+    renderAll(); toast(`Im ${l.nr}`);
+    return l.id;
+  } catch (err) { toast(nice(err), 4500); return null; }
+  finally { if (btn) busy(btn, false); }
+}
+async function removeFromLook(lookId, itemId) {
+  const { error } = await sb.from("look_items").delete().eq("look_id", lookId).eq("item_id", itemId);
+  if (error) return toast(nice(error), 4500);
+  LOOKS = LOOKS.map(x => x.id === lookId ? Object.assign({}, x, { items: x.items.filter(i => i !== itemId) }) : x);
+  const l = LOOKS.find(x => x.id === lookId);
+  if (l && !l.items.length && !l.foto_pfad) { await sb.from("looks").delete().eq("id", lookId); LOOKS = LOOKS.filter(x => x.id !== lookId); toast(`${l.nr} war leer und wurde gelöscht`); }
+  renderAll();
+}
+function lookSearch(l) {
+  const q = ($("lookQ").value || "").trim().toLowerCase();
+  const hits = !q ? [] : ITEMS.filter(x => !l.items.includes(x.id) && !CLOSED.includes(x.status) && [x.nr, x.titel, x.farben, x.kategorie, x.marke].join(" ").toLowerCase().includes(q)).slice(0, 12);
+  $("lookHits").innerHTML = hits.map(x => `<button class="mini" type="button" data-lookput="${esc(x.id)}">${imgUrl(x.foto_pfad) ? `<img src="${esc(imgUrl(x.foto_pfad))}" alt="">` : ""}+ ${esc(x.nr)} ${esc(x.titel)}</button>`).join("") || (q ? `<span class="hint">Nichts gefunden.</span>` : "");
+}
+async function saveLookMeta(id, btn) {
+  const patch = { name: val("lk-name") || "Look", style: val("lk-style") };
+  busy(btn, true);
+  const { data, error } = await sb.from("looks").update(patch).eq("id", id).select().single();
+  busy(btn, false);
+  if (error) return toast(nice(error), 4500);
+  LOOKS = LOOKS.map(x => x.id === id ? Object.assign({}, x, data) : x); renderAll(); showLook(id); toast("Gespeichert");
+}
 function lookPath(l) { if (l.foto_pfad) return l.foto_pfad; const f = ITEMS.find(x => x.id === l.items[0]); return f ? f.foto_pfad : ""; }
 function looksOf(id) { return LOOKS.filter(l => l.items.includes(id)); }
 function nice(err) {
@@ -332,13 +387,13 @@ function renderGrid() {
 }
 function renderLooks() {
   const lg = $("lookGrid");
-  if (!LOOKS.length) { lg.innerHTML = `<p class="empty">Noch keine Looks. Tippe auf «+ Look erstellen».</p>`; return; }
+  if (!LOOKS.length) { lg.innerHTML = `<p class="empty">Noch keine Looks. Öffne ein Teil und tippe auf «Zu Look hinzufügen».</p>`; return; }
   lg.innerHTML = LOOKS.map(l => `
     <div class="look">
       <button class="card" type="button" data-look="${esc(l.id)}" style="gap:10px">
-        <div class="ph">${imgTag(lookPath(l), l.name)}<span class="tag">${esc(l.nr)}</span></div>
+        <div class="ph">${collage(l)}<span class="tag">${esc(l.nr)}</span></div>
         <span class="style">${esc(l.style || "")}</span>
-        <span class="lname">${esc(l.name)}</span>
+        <span class="lname">${esc(l.name)} · ${l.items.length} ${l.items.length === 1 ? "Teil" : "Teile"}</span>
       </button>
       <div class="thumbs">${l.items.map(id => { const it = ITEMS.find(x => x.id === id); return it ? `<button class="mini" type="button" data-item="${esc(id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>` : ""; }).join("")}</div>
     </div>`).join("");
@@ -474,7 +529,7 @@ function onlineBlock(it) {
 function kombiIds(id) { return KOMBIS.filter(k => k.item_a === id || k.item_b === id).map(k => k.item_a === id ? k.item_b : k.item_a); }
 function kombiBlock(it) {
   const ids = kombiIds(it.id);
-  return `<div class="sec">Passt zu <span class="hint">· erscheint im Shop als «Kombiniere mit»</span></div>
+  return `<div class="sec">Alte Verknüpfungen <span class="hint">· bitte als Look neu anlegen und hier entfernen</span></div>
     ${ids.length ? `<div class="thumbs">${ids.map(id => { const x = ITEMS.find(y => y.id === id); return x ? `<span class="kombi"><button class="mini" type="button" data-item="${esc(id)}">${imgUrl(x.foto_pfad) ? `<img src="${esc(imgUrl(x.foto_pfad))}" alt="">` : ""}${esc(x.nr)} ${esc(x.titel)}</button><button class="btn ghost" type="button" data-kombidel="${esc(id)}" aria-label="Kombi entfernen">✕</button></span>` : ""; }).join("")}</div>` : `<p class="hint">Noch keine Kombis.</p>`}
     <div class="kombiadd"><input class="search" id="kombiQ" type="search" placeholder="Teil suchen und verknüpfen: Nummer, Titel, Farbe …" aria-label="Teil für Kombi suchen"><div class="thumbs" id="kombiHits"></div></div>`;
 }
@@ -561,15 +616,15 @@ function showItem(id, editing) {
           <button class="btn" type="button" data-edit="${esc(id)}">Bearbeiten</button>
           <button class="btn danger" type="button" data-del="${esc(id)}">Löschen</button>
         </div>
-        ${kombiBlock(it)}
-        <div class="sec">In Looks</div>
-        ${ls.length ? `<div class="thumbs">${ls.map(l => `<button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.style || "")} · ${esc(l.name)}</button>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
+        ${lookBlock(it)}
+        ${kombiIds(it.id).length ? kombiBlock(it) : ""}
         <div class="tech">Feste ID (ändert sich nie, auch wenn die Anzeigenummer wechselt):<br>${esc(it.id)}</div>
       </div>
     </div>`, { type: "item", id });
   const rep = $("rep-lib");
   rep.addEventListener("change", () => { if (rep.files[0]) replacePhoto(id, rep.files[0]); });
   const kq = $("kombiQ"); if (kq) kq.addEventListener("input", () => kombiSearch(it));
+  const ln = $("lookSel"); if (ln) ln.addEventListener("change", () => { $("lookNameWrap").hidden = ln.value !== "neu"; });
   const xf = $("xfile"); if (xf) xf.addEventListener("change", () => { if (xf.files[0]) addExtraFoto(id, xf.files[0]); });
 }
 
@@ -1144,19 +1199,20 @@ function showLook(id) {
   openPanel(`
     <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
-      <div class="big">${imgTag(lookPath(l), l.name, true)}</div>
+      <div class="big">${collage(l, true)}</div>
       <div>
         <div class="nr"><small>Look</small>${esc(l.nr)}</div>
-        <div class="style" style="margin-top:14px">${esc(l.style || "")}</div>
-        <h2 class="dt" style="margin-top:4px">${esc(l.name)}</h2>
-        <p class="desc">${esc(l.konzept || "")}</p>
-        <dl class="f"><dt>Status</dt><dd>${esc(l.status || "")}</dd><dt>Notiz</dt><dd>${esc(l.bemerkung || "")}</dd></dl>
-        <div class="sec">Teile in diesem Look</div>
-        <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? itemCard(it) : ""; }).join("")}</div>
+        <div class="two" style="margin-top:12px"><label>Name<input class="search" id="lk-name" value="${esc(l.name)}"></label>
+        <label>Stil-Energie<select class="search" id="lk-style"><option value="">–</option>${STYLES.map(st => `<option ${st === l.style ? "selected" : ""}>${st}</option>`).join("")}</select></label></div>
+        <div class="rowsmall"><button class="btn" type="button" data-looksave="${esc(l.id)}">Speichern</button></div>
+        <div class="sec">Teile in diesem Look · ${l.items.length}</div>
+        <div class="thumbs">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? `<span class="kombi"><button class="mini" type="button" data-item="${esc(it.id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)} ${esc(it.titel)}</button><button class="btn ghost" type="button" data-lookout="${esc(it.id)}" aria-label="Aus Look entfernen">✕</button></span>` : ""; }).join("")}</div>
+        <div class="kombiadd"><input class="search" id="lookQ" type="search" placeholder="Teil hinzufügen: Nummer, Titel, Farbe …" aria-label="Teil für diesen Look suchen"><div class="thumbs" id="lookHits"></div></div>
         <div class="row"><button class="btn danger" type="button" data-dellook="${esc(l.id)}">Look löschen</button></div>
-        <p class="hint">Beim Löschen eines Looks bleiben die Teile erhalten.</p>
+        <p class="hint">Beim Löschen eines Looks bleiben die Teile erhalten. Im Shop erscheinen Looks mit mindestens 2 Teilen, die gerade im Laden sind.</p>
       </div>
     </div>`, { type: "look", id });
+  const q = $("lookQ"); if (q) q.addEventListener("input", () => lookSearch(l));
 }
 async function deleteLook(id, btn) {
   if (!confirmTap(btn, "dellook" + id, "Wirklich löschen? Nochmals tippen")) return;
@@ -1355,6 +1411,11 @@ document.addEventListener("click", e => {
   if (d.otoken) return newToken(d.otoken, b);
   if (d.anfdone) return anfrageDone(d.anfdone, b);
   if (d.kombiadd) return kombiAdd(d.kombiadd, b);
+  if (d.lookadd) { const sel = $("lookSel").value; addToLook(d.lookadd, sel === "neu" ? null : sel, val("lookName"), b).then(id => { if (id) showItem(d.lookadd); }); return; }
+  if (d.lookrm && panelState) { const iid = panelState.id; removeFromLook(d.lookrm, iid).then(() => showItem(iid)); return; }
+  if (d.lookput && panelState) { const lid = panelState.id; addToLook(d.lookput, lid, null, b).then(() => showLook(lid)); return; }
+  if (d.lookout && panelState) { const lid = panelState.id; removeFromLook(lid, d.lookout).then(() => { if (LOOKS.some(x => x.id === lid)) showLook(lid); else closePanel(); }); return; }
+  if (d.looksave) return saveLookMeta(d.looksave, b);
   if (d.xdel !== undefined && panelState) return delExtraFoto(panelState.id, Number(d.xdel), b);
   if (d.kombidel) return kombiDel(d.kombidel);
   if (d.oedit) return ownerForm(ownerOf(d.oedit));

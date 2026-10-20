@@ -83,3 +83,9 @@ label.short{max-width:260px}
 #lookGrid .osec{font-family:var(--display);font-weight:800;font-stretch:112%;text-transform:uppercase;font-size:18px;margin:22px 0 10px}
 
 .pill.fpill{border-color:var(--red);color:var(--red)}
+
+.collage{display:grid;width:100%;height:100%;gap:2px;background:var(--line)}
+.collage.n2{grid-template-columns:1fr 1fr}
+.collage.n3,.collage.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.collage.n3 > :first-child{grid-row:span 2}
+.collage img,.collage .nofoto{width:100%;height:100%;object-fit:cover;display:block;min-height:0}
