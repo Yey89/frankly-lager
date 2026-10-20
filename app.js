@@ -1088,6 +1088,7 @@ function renderAnm() {
     return `<div class="mcard">
       <div class="mtop"><span class="oname">${esc(monthLabel(m))}</span><span class="hint">${esc(fmt(firstSat(parseD(m).getFullYear(), parseD(m).getMonth())).slice(3, 9))}–${esc(fmt(lastSat(parseD(m).getFullYear(), parseD(m).getMonth())).slice(3, 9))}</span></div>
       <div class="ostats"><span><b>${acc.length}</b> Owner</span><span><b>${teile}</b> Teile</span>${acc.some(a => a.vermieten) ? `<span><b>${acc.filter(a => a.vermieten).length}</b> mit Vermieten</span>` : ""}</div>
+      ${acc.length ? `<div class="thumbs" style="margin:6px 0">${acc.map(a => `<button class="mini" type="button" data-anm="${esc(a.id)}">${esc(anmName(a))}${a.vermieten ? (a.vermieten_ok == null ? " · Vermieten offen" : a.vermieten_ok ? " · vermietet" : "") : ""}</button>`).join("")}</div>` : ""}
       <dl class="f compact"><dt>Stile</dt><dd>${fmtC(stile)}</dd><dt>Oberteile</dt><dd>${fmtC(oben)}</dd><dt>Unterteile</dt><dd>${fmtC(unten)}</dd></dl>
       ${wish ? `<p class="hint">${wish} weitere ${wish === 1 ? "Anmeldung wünscht" : "Anmeldungen wünschen"} diesen Monat.</p>` : ""}
     </div>`;
@@ -1141,6 +1142,7 @@ function showAnm(id) {
       ${a.status === "Angenommen" && !a.owner_id ? `<button class="btn" type="button" data-aact="mkowner">Als Owner anlegen</button>` : ""}
       ${a.owner_id ? `<button class="linkbtn" type="button" data-owner="${esc(a.owner_id)}">Owner ${esc(a.owner_id)} ansehen</button>` : ""}
     </div>
+    ${a.status !== "Neu" ? `<div class="rowsmall"><button class="btn" type="button" data-aact="resend">E-Mail nochmals öffnen</button><span class="hint">Mit dem aktuellen Entscheid${a.vermieten ? " und Vermieten" : ""}</span></div>` : ""}
     <div id="act"></div>
     ${a.status_grund ? `<div class="box"><div class="sec" style="margin:0 0 6px">Letzte Nachricht</div><p class="pline">${esc(a.status_grund)}</p></div>` : ""}
     <div class="row"><button class="btn danger" type="button" data-aact="delete">Anmeldung löschen</button></div>
@@ -1156,14 +1158,18 @@ function mailTo(to, subject, body) {
   window.location.href = href;
 }
 const GRUSS = "\n\nLiebe Grüsse\nYesim · 0–100 Frankly";
-function anmMail(kind, a, monat, text) {
+const RENT_YES = "Auch deine Vermiet-Teile nehmen wir gerne auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.";
+const RENT_NO = "Deine Vermiet-Teile passen diesmal leider nicht in unser Vermiet-Angebot.";
+/* rent: true = Vermieten zugesagt, false = abgesagt, null = nichts dazu schreiben */
+function anmMail(kind, a, monat, text, rent, rentText) {
   const hi = `Hallo ${a.vorname}\n\n`;
+  const rentPart = rent === true ? RENT_YES + (rentText ? " " + rentText : "") + "\n\n" : rent === false ? RENT_NO + (rentText ? " " + rentText : "") + "\n\n" : "";
   if (kind === "accept") {
     const m = parseD(monat), fs = firstSat(m.getFullYear(), m.getMonth()), ls = lastSat(m.getFullYear(), m.getMonth());
-    return ["Du bist dabei bei 0–100 Frankly", hi + `schön, dass du mitmachst! Du bist für ${monthLabel(monat)} dabei. Die Runde läuft vom ${fmt(fs)} bis ${fmt(ls)}.\n\nBitte bring deine Teile (maximal 10) vor Rundenbeginn vorbei:\n${SHOP_ADR}\n\n` + (text ? text + "\n\n" : "") + `Von jedem Verkauf bekommst du 90 %, ausbezahlt am Ende der Runde.` + GRUSS];
+    return ["Du bist dabei bei 0–100 Frankly", hi + `schön, dass du mitmachst! Du bist für ${monthLabel(monat)} dabei. Die Runde läuft vom ${fmt(fs)} bis ${fmt(ls)}.\n\nBitte bring deine Teile (maximal 10${rent === true ? ", plus deine Vermiet-Teile" : ""}) vor Rundenbeginn vorbei:\n${SHOP_ADR}\n\n` + rentPart + (text ? text + "\n\n" : "") + `Von jedem Verkauf bekommst du 90 %, ausbezahlt am Ende der Runde.` + GRUSS];
   }
-  if (kind === "wait") return ["Deine Anmeldung bei 0–100 Frankly", hi + `danke für deine Anmeldung bei 0–100 Frankly! ${monat ? `Für ${monthLabel(monat)} sind wir leider schon voll. ` : ""}Wir haben dich auf die Warteliste gesetzt und melden uns, sobald ein Platz frei wird.\n\n` + (text || "") + GRUSS];
-  if (kind === "reject") return ["Deine Anmeldung bei 0–100 Frankly", hi + `vielen Dank für dein Interesse an 0–100 Frankly und für deine Anmeldung. Leider können wir dich diesmal nicht aufnehmen.\n\n` + (text || "") + GRUSS];
+  if (kind === "wait") return ["Deine Anmeldung bei 0–100 Frankly", hi + `danke für deine Anmeldung bei 0–100 Frankly! ${monat ? `Für ${monthLabel(monat)} sind wir leider schon voll. ` : ""}Wir haben dich auf die Warteliste gesetzt und melden uns, sobald ein Platz frei wird.\n\n` + rentPart + (text || "") + GRUSS];
+  if (kind === "reject") return ["Deine Anmeldung bei 0–100 Frankly", hi + `vielen Dank für dein Interesse an 0–100 Frankly und für deine Anmeldung. Leider können wir dich diesmal nicht aufnehmen${a.vermieten ? ", auch nicht mit den Vermiet-Teilen" : ""}.\n\n` + (text || "") + GRUSS];
   if (kind === "rent-yes") return ["Vermieten bei 0–100 Frankly: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.\n\n` + (text || "") + GRUSS];
   if (kind === "rent-no") return ["Vermieten bei 0–100 Frankly", hi + `danke für deine Fotos! Leider passen deine Teile diesmal nicht in unser Vermiet-Angebot.\n\n` + (text || "") + GRUSS];
 }
@@ -1175,6 +1181,12 @@ async function patchAnm(id, patch, msg) {
 async function anmAction(kind, btn) {
   const id = panelState && panelState.id, a = ANM.find(x => x.id === id); if (!a) return;
   if (kind === "cancel") { const el = $("act"); if (el) el.innerHTML = ""; return; }
+  if (kind === "resend") {
+    const k = a.status === "Angenommen" ? "accept" : a.status === "Warteliste" ? "wait" : a.status === "Absage" ? "reject" : null;
+    if (!k) return;
+    const [subj, body] = anmMail(k, a, a.status_monat ? a.status_monat.slice(0, 10) : null, "", a.vermieten ? a.vermieten_ok : null, "");
+    return mailTo(a.email, subj, body);
+  }
   if (kind === "delete") {
     if (!confirmTap(btn, "anmdel" + id, "Wirklich löschen? Nochmals tippen")) return;
     const r = await sb.from("anmeldungen").delete().eq("id", id);
@@ -1199,6 +1211,13 @@ async function anmAction(kind, btn) {
   el.innerHTML = `<form class="box actform" id="actForm" novalidate>
     <div class="sec" style="margin:0">${label}</div>
     ${withMonth ? `<label>Monat<select id="m-monat">${monthsAhead(5).map(m => `<option value="${m}" ${m === (a.status_monat || a.wunsch_monat || "").slice(0, 10) ? "selected" : ""}>${monthLabel(m)}</option>`).join("")}</select></label>` : ""}
+    ${a.vermieten && (kind === "accept" || kind === "wait") ? `<fieldset class="box" style="margin:0">
+      <legend class="sec" style="margin:0">Vermiet-Teile${kind === "accept" ? " *" : ""} <span class="hint">· Fotos oben prüfen</span></legend>
+      <label class="check"><input type="radio" name="m-rent" value="yes" ${a.vermieten_ok === true ? "checked" : ""}> Vermieten zusagen</label>
+      <label class="check"><input type="radio" name="m-rent" value="no" ${a.vermieten_ok === false ? "checked" : ""}> Vermieten absagen</label>
+      ${kind === "wait" ? `<label class="check"><input type="radio" name="m-rent" value="later" ${a.vermieten_ok == null ? "checked" : ""}> Später entscheiden</label>` : ""}
+      <label>Zum Vermieten (optional)<input id="m-renttext" placeholder="z.B. Das rote Abendkleid passt super, das blaue leider nicht."></label>
+    </fieldset>` : ""}
     <label>${needsText ? "Grund *" : "Dein Text"}<textarea id="m-text" rows="4" placeholder="${esc(ph)}"></textarea></label>
     <p class="hint">Danach öffnet sich dein Mailprogramm mit einer fertigen E-Mail an ${esc(a.email)}. Du kannst sie vor dem Senden noch anpassen.</p>
     <div class="rowsmall"><button class="btn primary" type="submit">Speichern & E-Mail öffnen</button><button class="btn" type="button" data-aact="save-only">Nur speichern</button><button class="btn ghost" type="button" data-aact="cancel">Abbrechen</button></div>
@@ -1207,14 +1226,18 @@ async function anmAction(kind, btn) {
   const run = async (sendMail, b) => {
     const text = $("m-text").value.trim(), monat = withMonth ? $("m-monat").value : null;
     if (needsText && !text) return toast("Bitte einen Grund eingeben.");
+    const rv = (document.querySelector('input[name="m-rent"]:checked') || {}).value;
+    if (a.vermieten && kind === "accept" && !rv) return toast("Bitte zuerst die Vermiet-Teile prüfen: zusagen oder absagen.", 4500);
+    const rent = rv === "yes" ? true : rv === "no" ? false : null, rentText = $("m-renttext") ? $("m-renttext").value.trim() : "";
     busy(b, true);
     const patch = kind.startsWith("rent") ? { vermieten_ok: kind === "rent-yes", status_grund: text || null }
-      : { status: kind === "accept" ? "Angenommen" : kind === "wait" ? "Warteliste" : "Absage", status_monat: monat, status_grund: text || null };
+      : Object.assign({ status: kind === "accept" ? "Angenommen" : kind === "wait" ? "Warteliste" : "Absage", status_monat: monat, status_grund: [text, rentText].filter(Boolean).join(" · ") || null },
+          rent !== null ? { vermieten_ok: rent } : kind === "reject" && a.vermieten ? { vermieten_ok: false } : {});
     const ok = await patchAnm(id, patch, label + " gespeichert");
     busy(b, false);
     if (!ok) return;
     showAnm(id);
-    if (sendMail) { const [subj, body] = anmMail(kind, a, monat, text); mailTo(a.email, subj, body); }
+    if (sendMail) { const [subj, body] = anmMail(kind, a, monat, text, kind.startsWith("rent") ? null : rent, rentText); mailTo(a.email, subj, body); }
   };
   $("actForm").onsubmit = e => { e.preventDefault(); run(true, e.submitter); };
   el.querySelector('[data-aact="save-only"]').onclick = e => { e.stopPropagation(); run(false, e.currentTarget); };
