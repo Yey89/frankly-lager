@@ -13,17 +13,16 @@ const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const STUFE = {
   Stange: "An der Stange",
   Reduziert: "An der Reduziert-Stange",
-  Upcycling: "An der Upcycling-Stange",
+  Upcycling: "Von Frankly upgecycelt, an der Upcycling-Stange. Wird es verkauft, bekommst du 20 %",
   Lager: "Im Lager · online auf Anfrage",
   Online: "Online-Stange · bei dir zu Hause"
 };
 const WAHL = {
   Stange: ["Preis senken", "Upcycling", "Zurücknehmen"],
-  Reduziert: ["Lager", "Online", "Zurücknehmen", "Spenden"],
-  Upcycling: ["Lager", "Online", "Zurücknehmen", "Spenden"],
-  Lager: ["Online", "Zurücknehmen", "Spenden"]
+  Reduziert: ["Online", "Upcycling", "Zurücknehmen", "Spenden"],
+  Lager: ["Online", "Upcycling", "Zurücknehmen", "Spenden"]
 };
-const WAHL_TXT = { "Preis senken": "Preis senken", Upcycling: "Upcyceln", Zurücknehmen: "Zurücknehmen", Lager: "Ins Lager", Online: "Online weiterverkaufen", Spenden: "Spenden" };
+const WAHL_TXT = { "Preis senken": "Preis senken", Upcycling: "Frankly upcycelt es (du bekommst 20 %)", Zurücknehmen: "Zurücknehmen", Lager: "Ins Lager", Online: "Abholen und online weiterverkaufen", Spenden: "Spenden" };
 
 let sb = null, TOKEN = null, DATA = null, URLS = {}, open = {};
 
@@ -77,6 +76,7 @@ function posts() {
 }
 function stateLine(it) {
   const p = phaseState(it);
+  if (it.entscheid === "Upcycling" && it.status === "Entwurf") return `<b>Bei Frankly zum Upcyceln.</b> Daraus entsteht etwas Neues. Wird es verkauft, bekommst du 20 %.${it.entscheid_notiz ? ` Deine Idee: «${esc(it.entscheid_notiz)}»` : ""}`;
   if (it.status === "Entwurf") return `Wird gerade erfasst`;
   if (it.status === "Verkauft") {
     const b = it.verkauf_preis != null ? it.verkauf_preis : it.preis, a = round2(Number(b) * (100 - provOf(it)) / 100);
@@ -94,7 +94,6 @@ function stateLine(it) {
   if (it.entscheid === "Zurücknehmen") return `<b>Abholung</b> am ${esc(fmt(it.entscheid_datum))} im Laden`;
   if (it.stufe === "Online") return `<b>Online-Stange:</b> Das Teil ist bei dir. Bitte bewahre es separat auf. Wird es gekauft, melden wir uns, und du verschickst es innert 3 Tagen.<br><button class="btn" type="button" data-online-ende="${esc(it.id)}">Nicht mehr verfügbar</button>`;
   if (it.entscheid === "Spenden") return `<b>Wird gespendet</b>`;
-  if (it.entscheid === "Upcycling") return it.entscheid_datum ? `<b>Upcycling</b> mit dir am ${esc(fmt(it.entscheid_datum))}` : `<b>Upcycling</b> durch das Team im Josy`;
   const s = STUFE[it.stufe] || "Im Laden";
   if (!p) return s;
   if (p.state === "upcoming") return `${s} ab ${esc(fmt(p.start))}`;
@@ -137,12 +136,8 @@ function decideForm(it, w) {
     <p class="dnote">Dein Teil hängt in ${esc(nextRound(it))} an der Reduziert-Stange. Bisher ${esc(chf(it.preis))}.</p>
     <label>Neuer Preis CHF<input id="d-preis-${id}" inputmode="decimal" autocomplete="off" placeholder="z.B. ${esc(it.preis != null ? Math.max(0, Math.round(Number(it.preis) * 0.7)) : 20)}"></label>`;
   if (w === "Upcycling") body = `
-    <p class="dnote">Nach dem Upcycling hängt dein Teil einen Monat an der Upcycling-Stange.</p>
-    <div class="radios">
-      <label><input type="radio" name="d-wer-${id}" value="Selbst upcyceln" checked> Ich upcycle selbst im Laden (Termin am Samstag)</label>
-      <label><input type="radio" name="d-wer-${id}" value="Upcycling-Team im Josy"> Das Upcycling-Team im Josy macht es</label>
-    </div>
-    <label id="d-tag-wrap-${id}">Termin<select id="d-tag-${id}">${satOptions()}</select></label>`;
+    <p class="dnote">Du gibst dein Teil an Frankly. Yesim macht daraus etwas Neues: ein ganz neues Stück, oder sie verändert es, z.B. kürzen oder einen anderen Schnitt. Das neue Teil hängt dann an der Upcycling-Stange. Wird es verkauft, bekommst du 20 % vom Preis, 80 % gehen an Frankly für Arbeit und Material.</p>
+    <label>Hast du eine Idee? (freiwillig)<textarea id="d-idee-${id}" rows="2" maxlength="300" placeholder="z.B. als Crop-Top, Ärmel ab, als Tasche …"></textarea></label>`;
   if (w === "Zurücknehmen") body = `
     <p class="dnote">Du holst dein Teil an einem Samstag im Laden ab.</p>
     <label>Abholung am<select id="d-tag-${id}">${satOptions()}</select></label>`;
@@ -164,9 +159,7 @@ async function submitDecision(id, btn) {
     args.p_preis = p;
   }
   if (w === "Upcycling") {
-    const r = document.querySelector(`input[name="d-wer-${CSS.escape(id)}"]:checked`);
-    args.p_notiz = r ? r.value : "Selbst upcyceln";
-    if (args.p_notiz === "Selbst upcyceln") args.p_datum = $("d-tag-" + id).value;
+    args.p_notiz = (($("d-idee-" + id) || {}).value || "").trim() || null;
   }
   if (w === "Zurücknehmen") args.p_datum = $("d-tag-" + id).value;
   if (w === "Online") {
@@ -194,7 +187,7 @@ function render() {
     <div class="ohead">
       <span class="sub">${esc(o.id)}</span>
       <h1 class="claim">Hallo ${esc(o.profilname)}</h1>
-      <p class="lead">Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf bekommst du ${esc(share)} %, von jeder Miete 70 %.</p>
+      <p class="lead">Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf bekommst du ${esc(share)} %, von jeder Miete 70 %, von deinen upgecycelten Teilen 20 %.</p>
     </div>
     <div class="okpis">
       <div class="okpi"><span class="klabel">Verdient bisher</span><span class="kval">${esc(chf(earned))}</span></div>
@@ -209,10 +202,11 @@ function render() {
       <span class="klabel">So läuft es</span>
       <ol>
         <li><b>Monat 1:</b> Dein Teil hängt zu deinem Preis an der Stange. Eine Runde geht vom ersten bis zum letzten Samstag im Monat.</li>
-        <li><b>Monat 2:</b> Ist es nicht verkauft, wählst du: Preis senken (Reduziert-Stange), upcyceln (Upcycling-Stange) oder zurücknehmen.</li>
-        <li><b>Monat 3:</b> Dein Teil kommt ins Lager und bleibt online sichtbar. Oder du nimmst es zurück oder spendest es.</li>
-        <li><b>Danach</b> holst du es an einem Samstag ab oder spendest es. Oder du verkaufst es auf der <b>Online-Stange</b> weiter: Es bleibt im Online-Shop, und du verschickst es, wenn jemand es kauft.</li>
+        <li><b>Monat 2:</b> Ist es nicht verkauft, wählst du: Preis senken (Reduziert-Stange), Frankly upcycelt es, oder du nimmst es zurück.</li>
+        <li><b>Nach Monat 2:</b> Du holst es ab und verkaufst es auf der <b>Online-Stange</b> weiter (du verschickst es, wenn jemand es kauft), oder Frankly upcycelt es. Zurücknehmen oder spenden geht auch.</li>
+        <li><b>Upcycling:</b> Frankly macht aus deinem Teil etwas Neues. Wird es verkauft, bekommst du 20 %.</li>
       </ol>
+      <p class="hint"><b>Testlauf:</b> Die ersten drei Monate sind ein Probelauf. Reduziert-Stange, Upcycling und Online-Stange können sich danach noch ändern. Wir informieren dich rechtzeitig.</p>
     </div>`;
 }
 function noLink(msg) {
@@ -223,8 +217,6 @@ function noLink(msg) {
 document.addEventListener("change", e => {
   const r = e.target.closest("input[data-wahl]");
   if (r) { open[r.dataset.wahl] = r.value; const it = DATA.items.find(x => x.id === r.dataset.wahl); const box = document.querySelector(`#row-${CSS.escape(it.id)} .decide`); if (box) box.outerHTML = decideBox(it); const f = document.querySelector(`[data-form="${CSS.escape(it.id)}"] input, [data-form="${CSS.escape(it.id)}"] select`); if (f) f.focus({ preventScroll: true }); return; }
-  const w = e.target.closest("input[name^='d-wer-']");
-  if (w) { const id = w.name.slice(6), wrap = $("d-tag-wrap-" + id); if (wrap) wrap.hidden = w.value !== "Selbst upcyceln"; }
 });
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-online-ende]"); if (!b) return;

@@ -11,8 +11,9 @@ const SELF = "OWN-001"; // Frankly / eigene Teile: keine Provision, keine Abrech
 const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet", "Zurückgegeben", "Gespendet"];
 const CLOSED = ["Verkauft", "Zurückgegeben", "Gespendet"];
 const STUFEN = ["Stange", "Reduziert", "Upcycling", "Lager", "Online"];
-const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Monat 2 · Upcycling-Stange", Lager: "Monat 3 · Lager, auf Anfrage", Online: "Online-Stange · bei der Owner, Versand" };
+const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Upcycling von Frankly · Owner 20 %", Lager: "Lager (alt), auf Anfrage", Online: "Online-Stange · bei der Owner, Versand" };
 const ONLINE_NOTIZ = "Online weiterverkaufen";
+const UPC_PROV = 80; // Upcycling durch Frankly: 80 % Frankly, 20 % ursprüngliche Owner
 const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
 const STYLES = ["FIERCE", "EDGY", "DREAMY", "AGILE"];
 const BASE_CATS = ["Oberteile", "Tuniken", "Hosen", "Röcke", "Kleider", "Jacken", "Kimonos", "Schuhe", "Taschen", "Accessoires"];
@@ -580,14 +581,13 @@ function phaseBlock(it) {
     acts = `<button class="btn primary" type="button" data-act="done">${doneTxt}</button><button class="btn" type="button" data-act="undecide">Entscheid ändern</button>`;
   }
   if (p.state === "due" || p.state === "running") {
-    if (stufe === "Stange") acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Upcycling …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
-    else if (stufe === "Lager") acts = `<button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
-    else acts = `<button class="btn" type="button" data-act="tolager">Ins Lager</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
+    if (stufe === "Stange") acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Frankly upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
+    else acts = `<button class="btn" type="button" data-act="toonline">Abholen + online …</button><button class="btn" type="button" data-act="upcycle">Frankly upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
   }
     return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Runde</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
 }
 /* Zusatzfotos: Hinten, Etikett, Grösse, Material & Pflege, Detail, Mangel */
-const FOTO_ARTEN = ["Hinten", "Etikett", "Grösse", "Material & Pflege", "Detail", "Mangel"];
+const FOTO_ARTEN = ["Hinten", "Etikett", "Grösse", "Material & Pflege", "Detail", "Mangel", "Vorher"];
 function extraFotos(it) { return Array.isArray(it && it.fotos_extra) ? it.fotos_extra : []; }
 function extraBlock(it) {
   const fs = extraFotos(it);
@@ -616,6 +616,13 @@ async function delExtraFoto(id, idx, btn) {
   if (error) return toast(nice(error), 4500);
   if (f) await removePhoto(f.pfad).catch(() => {});
   ITEMS = ITEMS.map(x => x.id === id ? data : x); showItem(id);
+}
+/* Upcycling durch Frankly: Teil liegt auf dem Upcycling-Stapel */
+function upcBlock(it) {
+  if (!(it.entscheid === "Upcycling" && it.status === "Entwurf")) return "";
+  return `<div class="box alert"><div class="sec" style="margin:0 0 6px">Upcycling-Stapel</div>
+    <p class="pline">Dieses Teil upcycelst du. Das neue Teil gehört zu ${UPC_PROV} % Frankly, ${100 - UPC_PROV} % gehen an ${esc(ownerName(it.owner_id))}.${it.entscheid_notiz ? ` Idee der Owner: «${esc(it.entscheid_notiz)}»` : ""}</p>
+    <div class="rowsmall"><button class="btn primary" type="button" data-act="upcdone">Upcycling fertig …</button></div></div>`;
 }
 function onlineBlock(it) {
   if (it.stufe !== "Online" || it.status !== "Verfügbar") return "";
@@ -703,6 +710,7 @@ function showItem(id, editing) {
         <div class="rowsmall">${statusActions(it)}</div>
         <div id="act"></div>
         ${anfrageBlock(it)}
+        ${upcBlock(it)}
         ${onlineBlock(it)}
         ${phaseBlock(it)}
         ${saleBlock(it)}
@@ -810,9 +818,9 @@ async function replacePhoto(id, file) {
     const blob = await resizeImage(file);
     const path = `items/${id}-${Date.now()}.jpg`;
     await uploadPhoto(path, blob);
-    const { data, error } = await sb.from("items").update({ foto_pfad: path }).eq("id", id).select().single();
+    const { data, error } = await sb.from("items").update(it.cut_pfad ? { foto_pfad: path, cut_pfad: null } : { foto_pfad: path }).eq("id", id).select().single();
     if (error) { await sb.storage.from(BUCKET).remove([path]); throw error; }
-    await removePhoto(it.foto_pfad).catch(() => {});
+    if (!extraFotos(it).some(f => f.pfad === it.foto_pfad)) await removePhoto(it.foto_pfad).catch(() => {}); // «Vorher»-Foto bleibt
     ITEMS = ITEMS.map(x => x.id === id ? data : x);
     renderAll(); showItem(id); toast("Foto ersetzt");
   } catch (err) { toast(nice(err), 4500); }
@@ -845,7 +853,7 @@ function actForm(html) { const a = $("act"); if (a) { a.innerHTML = `<form class
 function satOptions() { return nextSaturdays(8).map(d => `<option value="${iso(d)}">${fmt(d)}</option>`).join(""); }
 
 function openAction(kind, it) {
-  const prov = ownerProv(it.owner_id), self = it.owner_id === SELF;
+  const self = it.owner_id === SELF, prov = !self && it.stufe === "Upcycling" ? UPC_PROV : ownerProv(it.owner_id);
   if (kind === "sell") {
     actForm(`<div class="sec" style="margin:0">Verkauf erfassen</div>
       <div class="two"><label>Verkaufspreis CHF<input id="a-preis" inputmode="decimal" value="${esc(it.preis ?? "")}"></label>
@@ -896,23 +904,38 @@ function openAction(kind, it) {
     };
   }
   if (kind === "upcycle") {
-    actForm(`<div class="sec" style="margin:0">Upcycling</div>
-      <div class="two"><label>Wer<select id="a-wer"><option>Selbst upcyceln</option><option>Upcycling-Team im Josy</option></select></label><label>Termin<input id="a-datum" type="date" value="${iso(nextSaturdays(1)[0])}"></label></div>
-      <label>Notiz (Uhrzeit, Idee)<input id="a-notiz" placeholder="z.B. 14 Uhr"></label>
-      <p class="hint">Wenn das Upcycling fertig ist, auf «Upcycling fertig» tippen. Dann hängt das Teil einen Monat an der Upcycling-Stange.</p>
-      <div class="rowsmall"><button class="btn primary" type="submit">Termin speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
+    actForm(`<div class="sec" style="margin:0">Frankly upcycelt</div>
+      <p class="hint">Das Teil kommt aus dem Laden auf deinen Upcycling-Stapel. Wird das neue Teil verkauft: ${UPC_PROV} % Frankly, ${100 - UPC_PROV} % an die Owner.</p>
+      <label>Idee der Owner (freiwillig)<input id="a-notiz" maxlength="300" placeholder="z.B. als Crop-Top"></label>
+      <div class="rowsmall"><button class="btn primary" type="submit">Auf den Upcycling-Stapel</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
-      e.preventDefault(); if ($("a-wer").value === "Selbst upcyceln" && !$("a-datum").value) return toast("Bitte ein Datum wählen.");
-      const btn = e.submitter; busy(btn, true);
-      const wer = $("a-wer").value, notiz = [wer, val("a-notiz")].filter(Boolean).join(" · ");
-      const ok = await patchItem(it.id, { entscheid: "Upcycling", entscheid_datum: $("a-datum").value || null, entscheid_notiz: notiz, entscheid_von: "Team" }, "Upcycling gespeichert");
+      e.preventDefault(); const btn = e.submitter; busy(btn, true);
+      const ok = await patchItem(it.id, { stufe: "Upcycling", status: "Entwurf", phase_monat: null, entscheid: "Upcycling", entscheid_datum: null, entscheid_notiz: val("a-notiz") || null, entscheid_von: "Team" }, `${it.nr} liegt auf dem Upcycling-Stapel`);
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
-  if (kind === "takeback") {
+  if (kind === "upcdone") {
+    actForm(`<div class="sec" style="margin:0">Upcycling fertig</div>
+      <div class="two"><label>Neuer Titel<input id="a-titel" value="${esc(it.titel)}"></label><label>Neuer Preis CHF<input id="a-preis" inputmode="decimal" value="${esc(it.preis ?? "")}"></label></div>
+      ${it.foto_pfad ? `<label class="check"><input id="a-vorher" type="checkbox" checked> Altes Foto als «Vorher» behalten</label>` : ""}
+      <p class="hint">Danach mit «Hauptfoto ersetzen» das Foto vom neuen Teil hochladen. Die Nummer bleibt gleich, so sieht man die Geschichte des Teils.</p>
+      <div class="rowsmall"><button class="btn primary" type="submit">An die Upcycling-Stange</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
+    $("actForm").onsubmit = async e => {
+      e.preventDefault(); const p = parsePrice($("a-preis").value);
+      if (p == null) return toast("Bitte den Preis eingeben.");
+      const btn = e.submitter; busy(btn, true);
+      const patch = { titel: val("a-titel") || it.titel, preis: p, stufe: "Upcycling", status: "Verfügbar", phase_monat: null, entscheid: null, entscheid_datum: null, entscheid_notiz: null };
+      if ($("a-vorher") && $("a-vorher").checked && !extraFotos(it).some(f => f.pfad === it.foto_pfad)) patch.fotos_extra = [{ pfad: it.foto_pfad, art: "Vorher" }].concat(extraFotos(it)).slice(0, 7);
+      if (it.cut_pfad) patch.cut_pfad = null;
+      const ok = await patchItem(it.id, patch, `${it.nr} hängt an der Upcycling-Stange. Jetzt neues Foto hochladen.`);
+      busy(btn, false); if (ok) showItem(it.id);
+    };
+  }
+  if (kind === "takeback" || kind === "toonline") {
+    const online = kind === "toonline";
     actForm(`<div class="sec" style="margin:0">Zurücknehmen · Abholung am Samstag</div>
       <label>Abhol-Samstag<select id="a-datum">${satOptions()}</select></label>
-      ${it.stufe && it.stufe !== "Stange" ? `<label class="check"><input id="a-online" type="checkbox"> Danach online weiterverkaufen (Owner bewahrt es auf und verschickt es)</label>` : ""}
+      ${it.stufe && it.stufe !== "Stange" ? `<label class="check"><input id="a-online" type="checkbox" ${online ? "checked" : ""}> Danach online weiterverkaufen (Owner bewahrt es auf und verschickt es)</label>` : ""}
       <div class="rowsmall"><button class="btn primary" type="submit">Abholung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const btn = e.submitter; busy(btn, true);
@@ -926,7 +949,7 @@ function openAction(kind, it) {
 async function runAct(kind, btn) {
   const id = panelState && panelState.id, it = ITEMS.find(x => x.id === id); if (!it) return;
   if (kind === "cancel") { const a = $("act"); if (a) a.innerHTML = ""; return; }
-  if (["sell", "rent", "lower", "upcycle", "takeback"].includes(kind)) return openAction(kind, it);
+  if (["sell", "rent", "lower", "upcycle", "upcdone", "takeback", "toonline"].includes(kind)) return openAction(kind, it);
   if (kind === "setstatus") { busy(btn, true); const ok = await patchItem(id, { status: btn.dataset.v }, `${it.nr}: ${btn.dataset.v}`); if (ok) showItem(id); else busy(btn, false); return; }
   if (kind === "returned") {
     busy(btn, true);

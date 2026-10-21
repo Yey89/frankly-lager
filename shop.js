@@ -65,6 +65,7 @@ function badge(it) {
   if (it.stufe === "Lager") return `<span class="pill">Auf Anfrage</span>`;
   if (it.stufe === "Online") return `<span class="pill">Versand durch Owner</span>`;
   if (it.stufe === "Reduziert") return `<span class="pill sold">Reduziert</span>`;
+  if (it.stufe === "Upcycling") return `<span class="pill fpill">Upcycled by Frankly</span>`;
   return "";
 }
 
@@ -323,6 +324,7 @@ function showItem(nr) {
         <h2 class="dt">${esc(it.titel)}</h2>
         <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}${franklyPill(it)}</div>
         ${it.owner_id === "OWN-001" ? `<p class="hint">Frankly-Teil: Hier gilt dein Fotoecke-Gutschein.</p>` : ""}
+        ${it.stufe === "Upcycling" ? `<p class="hint">Upcycled by Frankly: Aus einem Secondhand-Teil neu gemacht, ein Einzelstück. ${(it.fotos_extra || []).some(f => f.art === "Vorher") ? "Unter «Vorher» siehst du das Original." : ""} Die ursprüngliche Owner bekommt einen Teil vom Preis.</p>` : ""}
         ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? `Dieses Teil ist bis ${esc(shortDate(RENT[it.id].bis))} vermietet und danach wieder im Laden.` : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
         ${it.status === "Reserviert" ? `<p class="hint">${it.reserviert_bis ? `Dieses Teil ist bis ${esc(resText(it.reserviert_bis))} reserviert. Danach ist es vielleicht wieder frei.` : "Dieses Teil ist für jemanden reserviert."}</p>` : ""}
         ${it.status === "Verfügbar" && ["Stange", "Reduziert", "Upcycling"].includes(it.stufe || "Stange") ? resBox(it) : ""}
