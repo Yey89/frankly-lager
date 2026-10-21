@@ -265,6 +265,7 @@ function lookCard(l, combo) {
         <span class="style">${esc(l.style || "")}</span>
         <span class="lname">${esc(l.name)} · ${l.items.length} Teile</span>
       </button>
+      ${!combo && OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-rollcard="${esc(l.id)}">↻ Neu kombinieren</button>` : ""}
     </div>`;
 }
 /* Kombi, in der ein bestimmtes Teil vorkommt (für die Teil-Ansicht / QR-Code) */
@@ -532,6 +533,7 @@ document.addEventListener("click", e => {
   if (d.szshow !== undefined) { SHOWALL = !SHOWALL; return renderGrid(); }
   if (d.item) return showItem(d.item);
   if (d.look) return showLook(d.look);
+  if (d.rollcard) { const l = LOOKS.find(x => x.id === d.rollcard); if (l) { COMBO[l.id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id); renderLooks(); } return; }
   if (d.roll) { const l = LOOKS.find(x => x.id === d.roll); if (l) { COMBO[l.id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id); showLook(l.id); renderLooks(); } return; }
   if (d.street) return showStreet(d.street);
   if (d.owner) return showOwner(d.owner);

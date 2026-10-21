@@ -422,6 +422,7 @@ function renderLooks() {
         <span class="style">${esc(l.style || "")}</span>
         <span class="lname">${esc(l.name)} · ${l.items.length} ${l.items.length === 1 ? "Teil" : "Teile"}</span>
       </button>
+      ${OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-lookrollcard="${esc(l.id)}">↻ Neu kombinieren</button>` : ""}
       <div class="thumbs">${l.items.map(id => { const it = ITEMS.find(x => x.id === id); return it ? `<button class="mini" type="button" data-item="${esc(id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>` : ""; }).join("")}</div>
     </div>`).join("");
 }
@@ -565,14 +566,14 @@ function phaseBlock(it) {
   }
     return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Runde</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
 }
-/* Zusatzfotos: Hinten, Etikett, Detail, Mangel */
-const FOTO_ARTEN = ["Hinten", "Etikett", "Detail", "Mangel"];
+/* Zusatzfotos: Hinten, Etikett, Grösse, Material & Pflege, Detail, Mangel */
+const FOTO_ARTEN = ["Hinten", "Etikett", "Grösse", "Material & Pflege", "Detail", "Mangel"];
 function extraFotos(it) { return Array.isArray(it && it.fotos_extra) ? it.fotos_extra : []; }
 function extraBlock(it) {
   const fs = extraFotos(it);
-  return `<div class="sec">Weitere Fotos <span class="hint">· max. 5, im Shop unter dem Hauptfoto</span></div>
+  return `<div class="sec">Weitere Fotos <span class="hint">· max. 7, im Shop unter dem Hauptfoto</span></div>
     ${fs.length ? `<div class="xfotos">${fs.map((f, i) => `<figure class="xfoto">${imgUrl(f.pfad) ? `<img src="${esc(imgUrl(f.pfad))}" alt="${esc(f.art)}">` : `<span class="nofoto">Foto</span>`}<figcaption>${esc(f.art)}<button class="btn ghost" type="button" data-xdel="${i}" aria-label="Foto entfernen">✕</button></figcaption></figure>`).join("")}</div>` : `<p class="hint">Noch keine. Tipp: Etikett und Mängel zeigen schafft Vertrauen.</p>`}
-    ${fs.length < 5 ? `<div class="rowsmall"><select class="search" id="xart" aria-label="Art des Fotos">${FOTO_ARTEN.map(a => `<option>${a}</option>`).join("")}</select><label class="btn" for="xfile">+ Foto hinzufügen</label><input id="xfile" type="file" accept="image/*" hidden></div>` : ""}`;
+    ${fs.length < 7 ? `<div class="rowsmall"><select class="search" id="xart" aria-label="Art des Fotos">${FOTO_ARTEN.map(a => `<option>${a}</option>`).join("")}</select><label class="btn" for="xfile">+ Foto hinzufügen</label><input id="xfile" type="file" accept="image/*" hidden></div>` : ""}`;
 }
 async function addExtraFoto(id, file) {
   const it = ITEMS.find(x => x.id === id); if (!it) return;
@@ -1325,7 +1326,8 @@ function showLook(id) {
 function rollLook(id) {
   const l = LOOKS.find(x => x.id === id); if (!l) return;
   COMBO[id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id);
-  showLook(id); renderLooks();
+  if (panelState && panelState.type === "look" && panelState.id === id) showLook(id);
+  renderLooks();
 }
 async function comboAsNew(id, btn) {
   const l = LOOKS.find(x => x.id === id); if (!l) return;
@@ -1594,6 +1596,7 @@ document.addEventListener("click", e => {
   if (d.lookout && panelState) { const lid = panelState.id; removeFromLook(lid, d.lookout).then(() => { if (LOOKS.some(x => x.id === lid)) showLook(lid); else closePanel(); }); return; }
   if (d.looksave) return saveLookMeta(d.looksave, b);
   if (d.lookroll) return rollLook(d.lookroll);
+  if (d.lookrollcard) return rollLook(d.lookrollcard);
   if (d.lookasnew) return comboAsNew(d.lookasnew, b);
   if (d.lookcut) { const l = LOOKS.find(x => x.id === d.lookcut); if (l) cutMany(lookItems(l).filter(it => it.foto_pfad && !it.cut_pfad), b, () => showLook(l.id)); return; }
   if (d.xdel !== undefined && panelState) return delExtraFoto(panelState.id, Number(d.xdel), b);
