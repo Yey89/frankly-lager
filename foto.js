@@ -33,6 +33,7 @@ function renderItems() {
   $("fChosen").textContent = chosen.length ? "Ausgewählt: " + chosen.join(", ") : "";
 }
 $("fSearch").addEventListener("input", renderItems);
+$("fGedanke").addEventListener("input", () => { $("fGedankeN").textContent = $("fGedanke").value.length + " / 280"; });
 $("fItems").addEventListener("click", e => {
   const b = e.target.closest("[data-nr]"); if (!b) return;
   const nr = b.dataset.nr, i = chosen.indexOf(nr);
@@ -70,7 +71,7 @@ $("fFile").addEventListener("change", () => {
   $("fPick").innerHTML = `<img src="${URL.createObjectURL(f)}" alt="Dein Foto">`;
 });
 $("fAgain").addEventListener("click", () => {
-  file = null; $("fFile").value = ""; $("fPick").innerHTML = "<span>Foto wählen oder aufnehmen</span>";
+  file = null; $("fFile").value = ""; $("fGedanke").value = ""; $("fGedankeN").textContent = "0 / 280"; $("fPick").innerHTML = "<span>Foto wählen oder aufnehmen</span>";
   chosen = []; renderItems();
   $("fDone").hidden = true; $("fForm").hidden = false; window.scrollTo(0, 0);
 });
@@ -91,7 +92,7 @@ $("fForm").addEventListener("submit", async e => {
     for (let i = 0; i < 3 && !c; i++) {
       const tryCode = code();
       const { error } = await sb.from("fotoecke").insert({ pfad: path, name: v("fName"), instagram: v("fIg"), teile: chosen.length ? chosen.join(", ") : null, email: v("fMail") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("fMail")) ? v("fMail") : null,
-        ok_intern: true, ok_oeffentlich: $("fPublic").checked, gutschein: tryCode });
+        ok_intern: true, ok_oeffentlich: $("fPublic").checked, gutschein: tryCode, gedanke: v("fGedanke") });
       if (!error) c = tryCode; else { lastErr = error; if (!/duplicate|unique/i.test(error.message || "")) break; }
     }
     if (!c) throw lastErr || new Error("Speichern fehlgeschlagen");

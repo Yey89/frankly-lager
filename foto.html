@@ -11,8 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=18">
-<link rel="stylesheet" href="shop.css?v=18">
+<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="shop.css?v=19">
 <style>
 .fpage{max-width:560px;padding-block:20px 40px;display:grid;gap:16px}
 .fpick{border:2px dashed var(--ink);background:var(--surface);aspect-ratio:3/4;max-height:56vh;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden;position:relative}
@@ -49,9 +49,12 @@
       <div class="fitems" id="fItems"><p class="hint">Teile werden geladen …</p></div>
       <p class="hint" id="fChosen"></p>
     </div>
+    <label>Dein Gedanke zu diesem Look (freiwillig)
+      <textarea id="fGedanke" rows="3" maxlength="280" placeholder="z.B. Heute fühle ich mich mutig. Diese Farbe hätte ich früher nie getragen."></textarea>
+      <span class="hint" id="fGedankeN">0 / 280</span></label>
     <label>Deine E-Mail für den Gutschein (freiwillig)<input id="fMail" type="email" maxlength="160" autocomplete="email" placeholder="Wir schicken dir den Code auch per E-Mail"></label>
     <label class="check"><input id="fIntern" type="checkbox" checked> Frankly darf das Foto intern anschauen und auswerten (welche Teile zusammen getragen werden). *</label>
-    <label class="check"><input id="fPublic" type="checkbox"> Frankly darf das Foto auch auf Instagram und der Website zeigen, mit meinem Vornamen oder Instagram-Namen, falls angegeben.</label>
+    <label class="check"><input id="fPublic" type="checkbox"> Frankly darf das Foto auch auf Instagram und der Website zeigen, mit meinem Vornamen oder Instagram-Namen und meinem Gedanken, falls angegeben.</label>
     <p class="hint">Sind andere Personen auf dem Foto, frag sie bitte vorher. Du kannst deine Zustimmung jederzeit im Laden zurückziehen.</p>
     <label class="hp" aria-hidden="true">Website<input id="fWeb" tabindex="-1" autocomplete="off"></label>
     <p class="err" id="fErr" aria-live="polite"></p>
@@ -70,7 +73,7 @@
 <script>
   if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
 </script>
-<script src="config.js?v=18"></script>
-<script src="foto.js?v=18"></script>
+<script src="config.js?v=19"></script>
+<script src="foto.js?v=19"></script>
 </body>
 </html>

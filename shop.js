@@ -106,7 +106,9 @@ async function load() {
     const r = await sb.from("vermietungen").select("item_id,von,bis,zurueck_am").is("zurueck_am", null);
     (r.data || []).forEach(x => { const cur = RENT[x.item_id]; if (!cur || String(x.von) > String(cur.von)) RENT[x.item_id] = x; });
   }
-  const fe = await sb.from("fotoecke").select("id,created_at,pfad,teile,name,instagram").order("created_at", { ascending: false }).limit(60);
+  const feQ = f => sb.from("fotoecke").select(f).order("created_at", { ascending: false }).limit(60);
+  let fe = await feQ("id,created_at,pfad,teile,name,instagram,gedanke");
+  if (fe.error && /gedanke/.test(fe.error.message || "")) fe = await feQ("id,created_at,pfad,teile,name,instagram"); // falls 17_fotoecke_gedanke.sql fehlt
   STREET = fe.error ? [] : (fe.data || []);
   const kb = await sb.from("kombis").select("item_a,item_b");
   KOMBIS = kb.error ? [] : (kb.data || []);
@@ -227,6 +229,7 @@ function streetCard(f) {
       <button class="card" type="button" data-street="${esc(f.id)}" style="gap:10px">
         <div class="ph">${u ? `<img src="${esc(u)}" alt="Look aus der Fotoecke" loading="lazy" decoding="async">` : `<span class="nofoto">Foto lädt …</span>`}</div>
         ${streetWho(f) ? `<span class="style">${esc(streetWho(f))}</span>` : ""}
+        ${f.gedanke ? `<span class="gedanke">«${esc(f.gedanke)}»</span>` : ""}
       </button>
       ${its.length ? `<div class="thumbs">${its.map(it => `<button class="mini" type="button" data-item="${esc(it.nr)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>`).join("")}</div>` : ""}
     </div>`;
@@ -240,6 +243,7 @@ function showStreet(id) {
       <div class="big">${u ? `<img src="${esc(u)}" alt="Look aus der Fotoecke">` : ""}</div>
       <div>
         ${f.name ? `<h2 class="dt">${esc(f.name)}</h2>` : ""}
+        ${f.gedanke ? `<blockquote class="gedanke gross">«${esc(f.gedanke)}»</blockquote>` : ""}
         ${ig ? `<a class="btn" href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">@${esc(ig)}</a>` : ""}
         <div class="sec">${its.length ? "Diese Teile trägt sie" : "Die Teile sind schon weg"}</div>
         ${its.length ? `<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${its.map(card).join("")}</div>` : `<p class="hint">Stöbere nach ähnlichen Teilen in deiner Grösse.</p>`}
