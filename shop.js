@@ -86,9 +86,19 @@ function renderInfo() {
 }
 
 /* ---------- Daten laden ---------- */
+/* Supabase gibt pro Abfrage höchstens 1000 Zeilen zurück: in Paketen laden */
+async function fetchAll(make) {
+  let out = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await make().range(from, from + 999);
+    if (r.error) return r;
+    out = out.concat(r.data || []);
+    if (!r.data || r.data.length < 1000) return { data: out, error: null };
+  }
+}
 async function load() {
   const F = "id,nr,nr_num,titel,kategorie,unterkategorie,schnitt,farben,muster,groesse,marke,material,zustand,preis,status,owner_id,foto_pfad,stufe,fotos_extra";
-  const itemsQ = f => sb.from("items").select(f).in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false });
+  const itemsQ = f => fetchAll(() => sb.from("items").select(f).in("status", ["Verfügbar", "Reserviert", "Vermietet"]).order("nr_num", { ascending: false }));
   sb.rpc("frankly_res_aufraeumen").then(() => {}, () => {}); // abgelaufene Reservationen freigeben (falls 16_reservieren.sql fehlt: egal)
   let [a, b, c] = await Promise.all([
     itemsQ(F + ",cut_pfad,reserviert_bis"),

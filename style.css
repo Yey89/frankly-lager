@@ -277,3 +277,15 @@ table.fin td{border-bottom:1px solid var(--line);padding:8px 8px 8px 0;vertical-
 .finform input,.finform select{width:100%;font:inherit;font-size:15px;color:var(--ink);padding:8px 10px;border:1px solid var(--line);background:var(--surface);min-width:0}
 .finyear{min-width:420px}
 .finyear tr.cur td{background:var(--surface)}
+
+/* Look-Auswahl im Teil */
+.lpicks{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;max-height:360px;overflow:auto;padding:2px;margin:6px 0 10px}
+.lpick{display:flex;gap:10px;align-items:center;text-align:left;background:var(--surface);border:2px solid var(--line);padding:6px;cursor:pointer;color:var(--ink);font:inherit;font-size:13px}
+.lpick[aria-pressed="true"]{border-color:var(--red)}
+.lpick[hidden]{display:none}
+.lpimg{width:56px;height:74px;flex:none;display:flex;align-items:center;justify-content:center;font-size:26px;background:var(--bg);overflow:hidden}
+.lpimg .outfit{width:56px;height:74px}
+.lptxt{display:grid;gap:3px;min-width:0}
+.lpparts{display:flex;flex-wrap:wrap;gap:3px}
+.lpparts img{width:22px;height:28px;object-fit:cover;display:block;border:1px solid var(--line)}
+.lpparts i{font-style:normal;font-family:var(--mono);font-size:10px}

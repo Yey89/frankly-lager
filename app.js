@@ -81,11 +81,21 @@ function collage(l) {
 /* Looks im Teil: anzeigen, hinzufügen, entfernen */
 function lookBlock(it) {
   const ls = looksOf(it.id), others = LOOKS.filter(l => !l.items.includes(it.id));
-  const opt = l => `<option value="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)}</option>`;
+  /* Look-Auswahl als Karten mit Outfit-Bild und Teilen, damit man sieht, welcher Look welcher ist */
+  const card = (l, on) => `<button class="lpick" type="button" data-looksel="${esc(l.id)}" aria-pressed="${on}">
+      <span class="lpimg">${collage(l)}</span>
+      <span class="lptxt"><b>${esc(l.nr)}</b> ${esc(l.name)}<span class="lpparts">${lookItems(l).map(x => imgUrl(x.foto_pfad) ? `<img src="${esc(imgUrl(x.foto_pfad))}" alt="${esc(x.nr)}" title="${esc(x.nr + " " + (x.titel || ""))}">` : `<i>${esc(x.nr)}</i>`).join("")}</span></span></button>`;
+  const first = ls.length ? ls[0].id : "neu";
   return `<div class="sec">Looks mit diesem Teil <span class="hint">· im Shop unter Looks</span></div>
     ${ls.length ? `<div class="thumbs">${ls.map(l => `<span class="kombi"><button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)} (${l.items.length} ${l.items.length === 1 ? "Teil" : "Teile"})</button><button class="btn ghost" type="button" data-lookrm="${esc(l.id)}" aria-label="Aus Look entfernen">✕</button></span>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
     <div class="box" style="margin-top:8px">
-      <label>1. In welchen Look?<select class="search" id="lookSel" style="width:100%;max-width:100%">${ls.map(opt).join("")}<option value="neu">+ Neuer Look</option>${others.map(opt).join("")}</select></label>
+      <div class="flabel">1. In welchen Look? <span class="hint">antippen</span></div>
+      <input type="hidden" id="lookSel" value="${esc(first)}">
+      ${LOOKS.length > 6 ? `<input class="search" id="lookFind" type="search" style="width:100%;margin:6px 0" placeholder="Look suchen: Nummer, Name oder Teil (z.B. Jeans)">` : ""}
+      <div class="lpicks" id="lookPicks">
+        <button class="lpick neu" type="button" data-looksel="neu" aria-pressed="${first === "neu"}"><span class="lpimg">+</span><span class="lptxt"><b>Neuer Look</b><span class="hint">bekommt die nächste Nummer</span></span></button>
+        ${ls.map(l => card(l, l.id === first)).join("")}${others.map(l => card(l, false)).join("")}
+      </div>
       <span id="lookNameWrap" ${ls.length ? "hidden" : ""}><input class="search" id="lookName" style="width:100%;margin-top:6px" placeholder="Name des neuen Looks (freiwillig)" aria-label="Name des neuen Looks"></span>
       <label style="margin-top:8px">2. Kombinieren mit: Teil suchen und antippen<input class="search" id="lookWith" type="search" style="width:100%" placeholder="Nummer, Titel, Farbe … z.B. Denim oder 7"></label>
       <div class="thumbs" id="lookWithHits"></div>
@@ -121,6 +131,7 @@ async function addToLook(itemId, lookId, name, btn) {
       LOOKS = LOOKS.map(x => x.id === l.id ? Object.assign({}, x, { items: x.items.concat(itemId) }) : x);
     }
     renderAll(); toast(`Im ${l.nr}`);
+    autoCut(itemId);
     return l.id;
   } catch (err) { toast(nice(err), 4500); return null; }
   finally { if (btn) busy(btn, false); }
@@ -283,10 +294,20 @@ async function startApp() {
 }
 
 /* ---------- Daten laden ---------- */
+/* Supabase gibt pro Abfrage höchstens 1000 Zeilen zurück: in Paketen laden */
+async function fetchAll(make) {
+  let out = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await make().range(from, from + 999);
+    if (r.error) return r;
+    out = out.concat(r.data || []);
+    if (!r.data || r.data.length < 1000) return { data: out, error: null };
+  }
+}
 async function load() {
   await sb.rpc("frankly_res_aufraeumen").then(() => {}, () => {}); // abgelaufene Online-Reservationen freigeben
   const [a, b, c, d] = await Promise.all([
-    sb.from("items").select("*").order("nr_num"),
+    fetchAll(() => sb.from("items").select("*").order("nr_num")),
     sb.from("looks").select("*, look_items(item_id, position)").order("nr_num"),
     sb.from("owners").select("*").order("id"),
     sb.from("vermietungen").select("*").order("von")
@@ -705,7 +726,13 @@ function showItem(id, editing) {
   const rep = $("rep-lib");
   rep.addEventListener("change", () => { if (rep.files[0]) replacePhoto(id, rep.files[0]); });
   const kq = $("kombiQ"); if (kq) kq.addEventListener("input", () => kombiSearch(it));
-  const ln = $("lookSel"); if (ln) ln.addEventListener("change", () => { $("lookNameWrap").hidden = ln.value !== "neu"; });
+  const lf = $("lookFind"); if (lf) lf.addEventListener("input", () => {
+    const q = lf.value.trim().toLowerCase();
+    document.querySelectorAll("#lookPicks [data-looksel]").forEach(b => {
+      const l = LOOKS.find(x => x.id === b.dataset.looksel);
+      b.hidden = !!q && !!l && ![l.nr, l.name, l.style].concat(lookItems(l).flatMap(x => [x.nr, x.titel, x.farben])).join(" ").toLowerCase().includes(q);
+    });
+  });
   const lw = $("lookWith"); if (lw) lw.addEventListener("input", () => lookWithSearch(it));
   const xf = $("xfile"); if (xf) xf.addEventListener("change", () => { if (xf.files[0]) addExtraFoto(id, xf.files[0]); });
 }
@@ -1391,6 +1418,17 @@ async function cutMany(list, btn, after) {
   busy(btn, false); renderAll(); if (after) after();
   toast(failed ? `${done} freigestellt, ${failed} fehlgeschlagen: ${lastErr}` : `${done} ${done === 1 ? "Teil" : "Teile"} freigestellt`, 6000);
 }
+/* Neu in einem Look und noch nicht freigestellt: im Hintergrund freistellen */
+const CUTTING = new Set();
+async function autoCut(itemId) {
+  const it = ITEMS.find(x => x.id === itemId);
+  if (!it || !it.foto_pfad || it.cut_pfad || CUTTING.has(itemId)) return;
+  CUTTING.add(itemId);
+  toast(`${it.nr} wird freigestellt …`, 4000);
+  try { await cutItem(it); renderAll(); refreshPanel && refreshPanel(); toast(`${it.nr} freigestellt`); }
+  catch (e) { toast(`${it.nr}: Freistellen hat nicht geklappt. Unten «Teile in Looks freistellen» nochmals versuchen.`, 6000); }
+  finally { CUTTING.delete(itemId); }
+}
 function missingCuts() { const inLook = new Set(LOOKS.flatMap(l => l.items)); return ITEMS.filter(it => inLook.has(it.id) && it.foto_pfad && !it.cut_pfad); }
 async function deleteLook(id, btn) {
   if (!confirmTap(btn, "dellook" + id, "Wirklich löschen? Nochmals tippen")) return;
@@ -1590,6 +1628,12 @@ document.addEventListener("click", e => {
   if (d.anfdone) return anfrageDone(d.anfdone, b);
   if (d.kombiadd) return kombiAdd(d.kombiadd, b);
   if (d.lookwith && panelState) { const cur = ITEMS.find(x => x.id === panelState.id); if (cur) combineWith(cur, d.lookwith, b); return; }
+  if (d.looksel) {
+    $("lookSel").value = d.looksel;
+    document.querySelectorAll("#lookPicks [data-looksel]").forEach(x => x.setAttribute("aria-pressed", x === b));
+    $("lookNameWrap").hidden = d.looksel !== "neu";
+    return;
+  }
   if (d.lookadd) { const sel = $("lookSel").value; addToLook(d.lookadd, sel === "neu" ? null : sel, val("lookName"), b).then(id => { if (id) showItem(d.lookadd); }); return; }
   if (d.lookrm && panelState) { const iid = panelState.id; removeFromLook(d.lookrm, iid).then(() => showItem(iid)); return; }
   if (d.lookput && panelState) { const lid = panelState.id; addToLook(d.lookput, lid, null, b).then(() => showLook(lid)); return; }
