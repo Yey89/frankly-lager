@@ -12,7 +12,12 @@
 const ETI_PER_PAGE = 12;
 let etiSel = new Set(), etiFilter = "laden";
 
-function etiShopUrl(nr) { const u = new URL("./", location.href); u.search = "?teil=" + nr; u.hash = ""; return u.href; }
+function etiShopUrl(nr, lang) { const u = new URL("./", location.href); u.search = "?teil=" + nr + (lang === "en" ? "&lang=en" : ""); u.hash = ""; return u.href; }
+/* Texte: Vorderseite Deutsch, Rückseite Englisch */
+const ETI_TXT = {
+  de: { badge: "FRANKLY-TEIL", voucher: "Hier gilt dein Fotoecke-Gutschein", from: "Aus dem Kleiderschrank von", friend: "einer Frankly-Freundin", size: "Grösse", scan: "Scannen und sehen, wie du es kombinierst" },
+  en: { badge: "FRANKLY PIECE", voucher: "Your photo corner voucher applies here", from: "From the closet of", friend: "a Frankly friend", size: "Size", scan: "Scan to see how to style it" }
+};
 function etiLoadQr() {
   if (window.qrcode) return Promise.resolve();
   return new Promise((res, rej) => {
@@ -32,18 +37,18 @@ function etiQrSvg(text) {
 function etiPrice(it) { const p = Number(it.preis); return it.preis != null && it.preis !== "" && !isNaN(p) ? "CHF " + (p % 1 ? p.toFixed(2) : p) : "CHF ___"; }
 function etiSize(it) { return (SZ && SZ.label ? SZ.label(it) : "") || it.groesse || "–"; }
 /* Layout wie freigegebene Vorschau (Oktober 2026) */
-function etiLabel(it) {
-  const own = it.owner_id === "OWN-001", o = ownerOf(it.owner_id);
-  const size = etiSize(it), meta = [size && size !== "–" ? "Grösse " + size : "", it.marke || ""].filter(Boolean).join(" · ");
+function etiLabel(it, lang) {
+  const T = ETI_TXT[lang || "de"], own = it.owner_id === "OWN-001", o = ownerOf(it.owner_id);
+  const size = etiSize(it), meta = [size && size !== "–" ? T.size + " " + size : "", it.marke || ""].filter(Boolean).join(" · ");
   return `<div class="tag${own ? " own" : ""}"><span class="hole"></span>
     <div class="head">0–100 <b>FRANKLY</b></div>
-    ${own ? `<div class="badge">FRANKLY-TEIL<small>Hier gilt dein Fotoecke-Gutschein</small></div>`
-          : `<div class="from">Aus dem Kleiderschrank von<b>${esc(o ? o.profilname : "einer Frankly-Freundin")}</b></div>`}
+    ${own ? `<div class="badge">${T.badge}<small>${T.voucher}</small></div>`
+          : `<div class="from">${T.from}<b>${esc(o ? o.profilname : T.friend)}</b></div>`}
     <div class="body">
       <div class="title">${esc(it.titel || "")}</div>
       ${meta ? `<div class="meta">${esc(meta)}</div>` : ""}
       <div class="price">${esc(etiPrice(it))}</div>
-      <div class="qrrow"><div class="qr">${etiQrSvg(etiShopUrl(it.nr))}</div><div class="qrtxt"><span class="nr">${esc(it.nr)}</span>Scannen und sehen, wie du es kombinierst</div></div>
+      <div class="qrrow"><div class="qr">${etiQrSvg(etiShopUrl(it.nr, lang))}</div><div class="qrtxt"><span class="nr">${esc(it.nr)}</span>${T.scan}</div></div>
     </div>
     <div class="foot">SECOND HAND AMONG FRIENDS</div>
   </div>`;
@@ -54,6 +59,7 @@ const ETI_CSS = `
 body{font-family:"Archivo","Helvetica Neue",Arial,sans-serif;color:#111110;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .sheet{width:210mm;height:297mm;padding:13.5mm 5mm;display:grid;grid-template-columns:repeat(4,50mm);grid-template-rows:repeat(3,90mm);page-break-after:always;break-after:page}
 .sheet:last-child{page-break-after:auto;break-after:auto}
+.back .tag{outline-color:transparent}
 .tag{position:relative;width:50mm;height:90mm;background:#fff;display:flex;flex-direction:column;overflow:hidden;outline:.2mm dashed #b9b8b2;outline-offset:-.1mm}
 .tag.empty{outline-color:transparent}
 .hole{position:absolute;top:4mm;left:50%;width:4.5mm;height:4.5mm;margin-left:-2.25mm;border-radius:50%;border:.3mm solid #9c9b94;background:#fff;z-index:3}
@@ -78,18 +84,26 @@ body{font-family:"Archivo","Helvetica Neue",Arial,sans-serif;color:#111110;backg
 .hint{font:12px/1.4 Arial,sans-serif;padding:10px 14px;background:#111110;color:#fff}
 @media print{.hint{display:none}}
 `;
-function etiDoc(items, skip) {
-  const cells = Array(skip || 0).fill(`<div class="tag empty"></div>`).concat(items.map(etiLabel));
+/* Beidseitig: nach jedem Blatt (Deutsch) folgt die Rückseite (Englisch).
+   Die Spalten sind gespiegelt, damit beim Wenden an der langen Kante jedes Etikett genau hinter sich selbst liegt. */
+function etiDoc(items, skip, duplex) {
+  const EMPTY = `<div class="tag empty"></div>`;
+  const slots = Array(skip || 0).fill(null).concat(items);
   const pages = [];
-  for (let i = 0; i < cells.length; i += ETI_PER_PAGE) {
-    const c = cells.slice(i, i + ETI_PER_PAGE);
-    while (c.length < ETI_PER_PAGE) c.push(`<div class="tag empty"></div>`);
-    pages.push(`<div class="sheet">${c.join("")}</div>`);
+  for (let i = 0; i < slots.length; i += ETI_PER_PAGE) {
+    const c = slots.slice(i, i + ETI_PER_PAGE);
+    while (c.length < ETI_PER_PAGE) c.push(null);
+    pages.push(`<div class="sheet">${c.map(it => it ? etiLabel(it, "de") : EMPTY).join("")}</div>`);
+    if (duplex) {
+      const back = [];
+      for (let r = 0; r < 3; r++) back.push(...c.slice(r * 4, r * 4 + 4).reverse());
+      pages.push(`<div class="sheet back">${back.map(it => it ? etiLabel(it, "en") : EMPTY).join("")}</div>`);
+    }
   }
   return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Frankly Etiketten</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@500;600&display=block">
 <style>${ETI_CSS}</style></head><body>
-<p class="hint">${items.length} Etiketten · Drucken auf A4, Grösse 100 %, «An Seite anpassen» ausschalten. Danach entlang der gestrichelten Linien schneiden und lochen.</p>
+<p class="hint">${items.length} Etiketten · Drucken auf A4, Grösse 100 %, «An Seite anpassen» ausschalten.${duplex ? " <b>Beidseitig drucken, an der langen Kante wenden</b> (Vorderseite Deutsch, Rückseite Englisch)." : ""} Danach entlang der gestrichelten Linien schneiden und lochen.</p>
 ${pages.join("")}
 <script>document.fonts.ready.then(function(){setTimeout(function(){window.print()},300)})<\/script>
 </body></html>`;
@@ -104,7 +118,8 @@ async function etiPrint(btn) {
   busy(btn, true, "Erstellen …");
   try {
     await etiLoadQr();
-    w.document.open(); w.document.write(etiDoc(items, skip)); w.document.close();
+    const duplex = !$("etiDuplex") || $("etiDuplex").checked;
+    w.document.open(); w.document.write(etiDoc(items, skip, duplex)); w.document.close();
   } catch (e) { w.close(); toast(nice(e), 5000); }
   busy(btn, false);
 }
@@ -136,6 +151,7 @@ function showEtiketten() {
     <div class="etilist" id="etiList"></div>
     <div class="box" style="margin-top:12px">
       <label>Angefangenes Blatt? So viele Felder oben leer lassen<input class="search" id="etiSkip" type="number" min="0" max="11" value="0" style="max-width:120px"></label>
+      <label class="check" style="margin-top:6px"><input id="etiDuplex" type="checkbox" checked> Beidseitig: Vorderseite Deutsch, Rückseite Englisch</label>
       <p class="hint" id="etiCount"></p>
       <button class="btn primary" type="button" id="etiPrintBtn">Etiketten drucken</button>
     </div>`, { type: "eti" });

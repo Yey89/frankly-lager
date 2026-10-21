@@ -30,7 +30,7 @@ function renderItems() {
   const q = ($("fSearch").value || "").trim().toLowerCase();
   const list = ITEMS.filter(i => chosen.includes(i.nr) || !q || [i.nr, i.titel, i.kategorie, i.farben, i.marke].join(" ").toLowerCase().includes(q)).slice(0, 60);
   $("fItems").innerHTML = list.length ? list.map(i => `<button class="fit" type="button" data-nr="${esc(i.nr)}" aria-pressed="${chosen.includes(i.nr)}"><span class="i">${URLS[i.foto_pfad] ? `<img src="${esc(URLS[i.foto_pfad])}" alt="">` : ""}</span>${esc(i.nr)}</button>`).join("") : `<p class="hint">Nichts gefunden.</p>`;
-  $("fChosen").textContent = chosen.length ? "Ausgewählt: " + chosen.join(", ") : "";
+  $("fChosen").textContent = chosen.length ? t("Ausgewählt: {x}", { x: chosen.join(", ") }) : "";
 }
 $("fSearch").addEventListener("input", renderItems);
 $("fGedanke").addEventListener("input", () => { $("fGedankeN").textContent = $("fGedanke").value.length + " / 280"; });
@@ -100,7 +100,7 @@ $("fForm").addEventListener("submit", async e => {
     $("fForm").hidden = true; $("fDone").hidden = false; window.scrollTo(0, 0);
   } catch (ex) {
     const m = (ex && ex.message) || String(ex);
-    err.textContent = /Failed to fetch|NetworkError|Load failed/i.test(m) ? "Keine Verbindung. Prüfe das Internet und versuch es nochmals." : "Das hat nicht geklappt: " + m;
+    err.textContent = /Failed to fetch|NetworkError|Load failed/i.test(m) ? "Keine Verbindung. Prüfe das Internet und versuch es nochmals." : t("Das hat nicht geklappt: {m}", { m: m });
   }
   btn.disabled = false; btn.textContent = "Foto senden";
 });
