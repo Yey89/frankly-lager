@@ -16,8 +16,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=19">
-<link rel="stylesheet" href="outfit.css?v=19">
+<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="outfit.css?v=21">
 </head>
 <body>
 
@@ -56,6 +56,7 @@
     <button class="tab" role="tab" id="tab-looks" aria-selected="false" type="button">Looks <span class="n" id="cntLooks"></span></button>
     <button class="tab" role="tab" id="tab-owners" aria-selected="false" type="button">Owner <span class="n" id="cntOwners"></span></button>
     <button class="tab" role="tab" id="tab-anm" aria-selected="false" type="button">Anmeldungen <span class="n" id="cntAnm"></span></button>
+    <button class="tab" role="tab" id="tab-finanzen" aria-selected="false" type="button">Finanzen</button>
     <button class="tab" role="tab" id="tab-insights" aria-selected="false" type="button">Erkenntnisse</button>
     <button class="tab" role="tab" id="tab-fotoecke" aria-selected="false" type="button">Fotoecke <span class="n" id="cntFoto"></span></button>
   </nav>
@@ -125,6 +126,11 @@
     <div id="fotoecke"></div>
   </section>
 
+  <section id="viewFinanzen" hidden>
+    <p class="hint" style="max-width:70ch;margin-top:14px">Dein Monatsziel neben dem, was wirklich passiert ist. Verkäufe und Vermietungen kommen automatisch, alles andere trägst du unten ein.</p>
+    <div id="finanzen"></div>
+  </section>
+
   <section id="viewInsights" hidden>
     <p class="hint" style="max-width:70ch;margin-top:14px">Was verkauft sich, was bleibt liegen, was geben Owner ab und was tragen Frauen seit Jahren? Diese Seite rechnet alles automatisch aus deinen Daten. Grundlage für deine spätere Kollektion.</p>
     <div id="insights"></div>
@@ -143,12 +149,13 @@
 <script>
   if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
 </script>
-<script src="config.js?v=19"></script>
-<script src="sizes.js?v=19"></script>
-<script src="outfit.js?v=19"></script>
-<script src="app.js?v=19"></script>
-<script src="insights.js?v=19"></script>
-<script src="fotoecke.js?v=19"></script>
-<script src="etiketten.js?v=19"></script>
+<script src="config.js?v=21"></script>
+<script src="sizes.js?v=21"></script>
+<script src="outfit.js?v=21"></script>
+<script src="app.js?v=21"></script>
+<script src="insights.js?v=21"></script>
+<script src="fotoecke.js?v=21"></script>
+<script src="etiketten.js?v=21"></script>
+<script src="finanzen.js?v=21"></script>
 </body>
 </html>

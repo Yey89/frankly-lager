@@ -494,11 +494,14 @@ function renderAll() {
   renderNews();
   renderCats(); renderGrid(); renderLooks(); renderOwners(); renderAnm();
   if (window.renderInsights && !$("viewInsights").hidden) renderInsights();
+  if (window.renderFinanzen && $("viewFinanzen") && !$("viewFinanzen").hidden) renderFinanzen();
   const mt = missingThumbs().length;
   $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "") + (missingCuts().length ? ` · <button class="btn" type="button" id="cutBtn">${missingCuts().length} Teile in Looks freistellen</button>` : "");
 }
 function setTab(t) {
-  ["items", "looks", "owners", "anm", "insights", "fotoecke"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  ["items", "looks", "owners", "anm", "finanzen", "insights", "fotoecke"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  $("viewFinanzen").hidden = t !== "finanzen";
+  if (t === "finanzen" && window.renderFinanzen) renderFinanzen(true);
   $("viewInsights").hidden = t !== "insights";
   $("viewFotoecke").hidden = t !== "fotoecke";
   if (t === "fotoecke" && window.renderFotoecke) renderFotoecke(true);
@@ -1606,6 +1609,7 @@ document.addEventListener("click", e => {
     case "tab-owners": return setTab("owners");
     case "tab-anm": return setTab("anm");
     case "tab-insights": return setTab("insights");
+    case "tab-finanzen": return setTab("finanzen");
     case "tab-fotoecke": return setTab("fotoecke");
     case "addBtn": return showAdd();
     case "addLookBtn": return showAddLook();
