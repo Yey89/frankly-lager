@@ -7,7 +7,7 @@
    ========================================================= */
 "use strict";
 
-const FIN_ARTEN = ["Servicepauschale", "Workshop", "Create Together", "Basteltisch", "Anpassung", "Mitgliedschaft", "Anderes"];
+const FIN_ARTEN = ["Servicepauschale", "Workshop", "Create Together", "Basteltisch", "Anpassung", "Mitgliedschaft", "Zuschlag Nichtmitglieder", "Anderes"];
 /* Reihenfolge und Beschreibung der Zeilen. art = Name in «einnahmen» (von Hand) */
 const FIN_QUELLEN = [
   { q: "Verkauf Owner-Teile", auto: true, einheit: "Teile", txt: "Deine Provision auf verkaufte Owner-Teile" },
@@ -18,7 +18,8 @@ const FIN_QUELLEN = [
   { q: "Create Together", art: "Create Together", einheit: "Termine", txt: "Begleitung bei eigenen Ideen" },
   { q: "Basteltisch", art: "Basteltisch", einheit: "Besuche", txt: "Platz und Material" },
   { q: "Anpassung", art: "Anpassung", einheit: "Aufträge", txt: "Kürzen, enger machen" },
-  { q: "Mitgliedschaft", art: "Mitgliedschaft", einheit: "Mitglieder", txt: "später" },
+  { q: "Mitgliedschaft", art: "Mitgliedschaft", einheit: "Mitglieder", txt: "Frankly Friends, Beitrag pro Monat" },
+  { q: "Zuschlag Nichtmitglieder", art: "Zuschlag Nichtmitglieder", einheit: "Teile", txt: "Zuschlag pro Teil für Nichtmitglieder" },
   { q: "Anderes", art: "Anderes", einheit: "", txt: "alles andere" }
 ];
 let FIN_E = [], FIN_Z = {}, finState = "idle", finMonat = null, finEdit = false;
@@ -27,6 +28,10 @@ function finMonthKey(d) { return String(d).slice(0, 7); }
 function finNowKey() { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`; }
 function finLabel(k) { const [y, m] = k.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("de-CH", { month: "long", year: "numeric" }); }
 function finShift(k, n) { const [y, m] = k.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; }
+function finStart() { const z = FIN_Z.Start; if (z && z.anzahl > 190000) { const v = Math.round(z.anzahl); return `${Math.floor(v / 100)}-${String(v % 100).padStart(2, "0")}`; } return finNowKey(); }
+function finMonthNo(k) { const [y1, m1] = finStart().split("-").map(Number), [y2, m2] = k.split("-").map(Number); return (y2 - y1) * 12 + (m2 - m1) + 1; }
+function finQ(k) { const n = finMonthNo(k); return n < 1 ? 1 : n > 12 ? 4 : Math.ceil(n / 3); }
+function finZ(q, quelle) { return FIN_Z[`Q${q}|${quelle}`] || { anzahl: 0, preis: 0 }; }
 function fchf(n) { return "CHF " + Math.round(Number(n) || 0).toLocaleString("de-CH"); }
 
 async function loadFin() {
@@ -55,14 +60,14 @@ function finIst(k) {
   });
   return ist;
 }
-function finZielChf(q) {
-  const z = FIN_Z[q]; if (!z) return 0;
+function finZielChf(q, quarter) {
+  const z = finZ(quarter, q); if (!z) return 0;
   if (q === "Verkauf Owner-Teile") return z.anzahl * z.preis * 0.10;  // Provision 10 %
   if (q === "Vermietung") return z.anzahl * z.preis * 0.30;           // Anteil 30 %
   return z.anzahl * z.preis;
 }
-function finZielTxt(q, einheit) {
-  const z = FIN_Z[q]; if (!z || (!z.anzahl && !z.preis)) return `<span class="hint">kein Ziel</span>`;
+function finZielTxt(q, einheit, quarter) {
+  const z = finZ(quarter, q); if (!z || (!z.anzahl && !z.preis)) return `<span class="hint">kein Ziel</span>`;
   const extra = q === "Verkauf Owner-Teile" ? " · davon 10 %" : q === "Vermietung" ? " · davon 30 %" : "";
   return `${z.anzahl} ${esc(einheit)} × Ø ${fchf(z.preis)}${extra}`;
 }
@@ -72,21 +77,22 @@ function renderFinanzen(reload) {
   if (reload || finState === "idle") { if (finState !== "loading") loadFin(); }
   if (finState === "missing") { el.innerHTML = `<p class="hint">Bitte zuerst <b>18_finanzen.sql</b> in Supabase ausführen.</p>`; return; }
   if (finState !== "ok") { el.innerHTML = `<p class="loading">Finanzen werden geladen …</p>`; return; }
-  const k = finMonat, ist = finIst(k);
+  if (!Object.keys(FIN_Z).some(x => /^Q\d\|/.test(x))) { el.innerHTML = `<p class="hint">Bitte noch <b>19_finanzen_jahr.sql</b> in Supabase ausführen.</p>`; return; }
+  const k = finMonat, ist = finIst(k), Q = finQ(k), mNo = finMonthNo(k);
   const rows = FIN_QUELLEN.map(x => {
-    const zc = finZielChf(x.q), ic = (ist[x.q] || {}).chf || 0, n = (ist[x.q] || {}).n || 0;
+    const zc = finZielChf(x.q, Q), ic = (ist[x.q] || {}).chf || 0, n = (ist[x.q] || {}).n || 0;
     if (!zc && !ic && !finEdit && (x.q === "Mitgliedschaft" || x.q === "Anderes")) return "";
     const pct = zc ? Math.min(100, Math.round(ic / zc * 100)) : (ic ? 100 : 0);
-    const z = FIN_Z[x.q] || { anzahl: 0, preis: 0 };
+    const z = finZ(Q, x.q);
     return `<tr>
       <td><b>${esc(x.q)}</b>${x.auto ? ` <span class="pill">automatisch</span>` : ""}<br><span class="hint">${esc(x.txt)}</span></td>
-      <td>${finEdit ? `<span class="finedit"><input type="number" min="0" step="1" data-zn="${esc(x.q)}" value="${z.anzahl}" aria-label="Ziel Anzahl ${esc(x.q)}"> × CHF <input type="number" min="0" step="1" data-zp="${esc(x.q)}" value="${z.preis}" aria-label="Ziel Ø Preis ${esc(x.q)}"></span>` : finZielTxt(x.q, x.einheit)}<br><b>${fchf(zc)}</b></td>
+      <td>${finEdit ? `<span class="finedit"><input type="number" min="0" step="1" data-zn="${esc(x.q)}" value="${z.anzahl}" aria-label="Ziel Anzahl ${esc(x.q)}"> × CHF <input type="number" min="0" step="1" data-zp="${esc(x.q)}" value="${z.preis}" aria-label="Ziel Ø Preis ${esc(x.q)}"></span>` : finZielTxt(x.q, x.einheit, Q)}<br><b>${fchf(zc)}</b></td>
       <td>${n} ${esc(x.einheit)}${ist[x.q] && ist[x.q].umsatz ? `<br><span class="hint">Umsatz ${fchf(ist[x.q].umsatz)}</span>` : ""}<br><b>${fchf(ic)}</b></td>
       <td class="finbar"><span class="bar"><i style="width:${pct}%"></i></span><span class="hint">${pct} %</span></td>
     </tr>`;
   }).join("");
-  const zSum = FIN_QUELLEN.reduce((s, x) => s + finZielChf(x.q), 0), iSum = FIN_QUELLEN.reduce((s, x) => s + ((ist[x.q] || {}).chf || 0), 0);
-  const kosten = FIN_Z.Kosten ? FIN_Z.Kosten.anzahl * FIN_Z.Kosten.preis : 0;
+  const zSum = FIN_QUELLEN.reduce((s, x) => s + finZielChf(x.q, Q), 0), iSum = FIN_QUELLEN.reduce((s, x) => s + ((ist[x.q] || {}).chf || 0), 0);
+  const kosten = finZ(Q, "Kosten").anzahl * finZ(Q, "Kosten").preis;
   const dayPct = k === finNowKey() ? Math.round(new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() * 100) : null;
   const me = FIN_E.filter(e => finMonthKey(e.datum) === k).sort((x, y) => String(y.datum).localeCompare(String(x.datum)));
   el.innerHTML = `
@@ -95,6 +101,7 @@ function renderFinanzen(reload) {
       <b class="finmonth">${esc(finLabel(k))}</b>
       <button class="btn" type="button" data-finm="1" aria-label="Monat vor">→</button>
       ${k !== finNowKey() ? `<button class="btn ghost" type="button" data-finm="0">Heute</button>` : ""}
+      <span class="hint">${mNo >= 1 && mNo <= 12 ? `Monat ${mNo} von 12 · Ziele für Monat ${Q * 3 - 2}–${Q * 3}` : mNo < 1 ? "vor dem Start · Ziele Monat 1–3" : "nach dem ersten Jahr · Ziele Monat 10–12"}</span>
     </div>
     <div class="finsum">
       <div><span class="lbl">Einnahmen bis jetzt</span><b>${fchf(iSum)}</b><span class="hint">Ziel ${fchf(zSum)}</span></div>
@@ -102,11 +109,12 @@ function renderFinanzen(reload) {
       <div><span class="lbl">Fortschritt</span><b>${zSum ? Math.round(iSum / zSum * 100) : 0} %</b><span class="hint">${dayPct != null ? `vom Monat vorbei: ${dayPct} %` : ""}</span></div>
     </div>
     <div class="fintable"><table class="fin">
-      <thead><tr><th>Einnahmequelle</th><th>Ziel pro Monat</th><th>Erreicht</th><th></th></tr></thead>
+      <thead><tr><th>Einnahmequelle</th><th>Ziel pro Monat (Monat ${Q * 3 - 2}–${Q * 3})</th><th>Erreicht</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <div class="rowsmall">${finEdit ? `<button class="btn primary" type="button" data-finsave>Ziele speichern</button><label style="display:inline-flex;gap:6px;align-items:center">Kosten pro Monat CHF <input type="number" min="0" step="10" id="finKost" value="${kosten}" style="width:90px"></label><button class="btn ghost" type="button" data-finedit>Abbrechen</button>` : `<button class="btn" type="button" data-finedit>Ziele anpassen</button>`}</div>
+    <div class="rowsmall">${finEdit ? `<button class="btn primary" type="button" data-finsave>Ziele speichern</button><label style="display:inline-flex;gap:6px;align-items:center">Kosten pro Monat CHF <input type="number" min="0" step="10" id="finKost" value="${kosten}" style="width:90px"></label><label style="display:inline-flex;gap:6px;align-items:center">Startmonat <input type="month" id="finStart" value="${finStart()}"></label><button class="btn ghost" type="button" data-finedit>Abbrechen</button>` : `<button class="btn" type="button" data-finedit>Ziele anpassen</button>`}</div>
 
+    ${finYear()}
     <form class="box finform" id="finForm" novalidate>
       <div class="sec" style="margin:0 0 6px">Einnahme erfassen</div>
       <div class="finrow">
@@ -120,7 +128,23 @@ function renderFinanzen(reload) {
     </form>
     ${me.length ? `<div class="sec">Von Hand erfasst im ${esc(finLabel(k))}</div>
     <ul class="rlist">${me.map(e => `<li><span>${esc(String(e.datum).split("-").reverse().join("."))}</span><span><b>${esc(e.art)}</b> · ${e.anzahl}× · ${fchf(e.betrag)}${e.notiz ? `<br><span class="hint">${esc(e.notiz)}</span>` : ""}</span><span><button class="btn ghost" type="button" data-findel="${esc(e.id)}" aria-label="Eintrag löschen">✕</button></span></li>`).join("")}</ul>` : ""}
-    <p class="hint">Ziele sind deine Annahmen (Startwerte: Variante C «Fair + Services»). Beträge vor AHV und Steuern.</p>`;
+    <p class="hint">Ziele sind deine Annahmen aus dem Finanzplan fürs erste Jahr. «Ziele anpassen» ändert die Ziele des angezeigten Quartals. Beträge vor AHV und Steuern.</p>`;
+}
+/* Jahresübersicht: pro Quartal Ziel (× 3 Monate) neben dem Erreichten */
+function finYear() {
+  const start = finStart(), now = finNowKey();
+  const rows = [1, 2, 3, 4].map(q => {
+    const ziel = FIN_QUELLEN.reduce((s, x) => s + finZielChf(x.q, q), 0) - finZ(q, "Kosten").anzahl * finZ(q, "Kosten").preis;
+    let ist = 0, done = 0;
+    for (let i = 0; i < 3; i++) {
+      const k = finShift(start, (q - 1) * 3 + i); if (k > now) continue; done++;
+      const is = finIst(k); ist += FIN_QUELLEN.reduce((s, x) => s + ((is[x.q] || {}).chf || 0), 0) - finZ(q, "Kosten").anzahl * finZ(q, "Kosten").preis;
+    }
+    const cur = finQ(now) === q && finMonthNo(now) >= 1 && finMonthNo(now) <= 12;
+    return `<tr${cur ? ' class="cur"' : ""}><td><b>Monat ${q * 3 - 2}–${q * 3}</b><br><span class="hint">${esc(finLabel(finShift(start, (q - 1) * 3)))} – ${esc(finLabel(finShift(start, q * 3 - 1)))}</span></td>
+      <td>${fchf(ziel)} / Monat<br><b>${fchf(ziel * 3)}</b></td><td>${done ? `${done} von 3 Monaten<br><b>${fchf(ist)}</b>` : `<span class="hint">noch nicht</span>`}</td></tr>`;
+  }).join("");
+  return `<div class="sec">Das erste Jahr · was bleibt nach Kosten</div><div class="fintable"><table class="fin finyear"><thead><tr><th>Quartal</th><th>Ziel</th><th>Erreicht</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 async function finAdd(form) {
   const art = $("fi-art").value, n = parseInt($("fi-n").value, 10) || 0, b = parseFloat($("fi-b").value), d = $("fi-d").value;
@@ -138,8 +162,10 @@ async function finDel(id, btn) {
   FIN_E = FIN_E.filter(e => e.id !== id); renderFinanzen();
 }
 async function finSave(btn) {
-  const rows = FIN_QUELLEN.map(x => ({ quelle: x.q, anzahl: parseFloat(document.querySelector(`[data-zn="${CSS.escape(x.q)}"]`).value) || 0, preis: parseFloat(document.querySelector(`[data-zp="${CSS.escape(x.q)}"]`).value) || 0 }));
-  rows.push({ quelle: "Kosten", anzahl: 1, preis: parseFloat($("finKost").value) || 0 });
+  const Q = finQ(finMonat);
+  const rows = FIN_QUELLEN.map(x => ({ quelle: `Q${Q}|${x.q}`, anzahl: parseFloat(document.querySelector(`[data-zn="${CSS.escape(x.q)}"]`).value) || 0, preis: parseFloat(document.querySelector(`[data-zp="${CSS.escape(x.q)}"]`).value) || 0 }));
+  rows.push({ quelle: `Q${Q}|Kosten`, anzahl: 1, preis: parseFloat($("finKost").value) || 0 });
+  const st = ($("finStart").value || "").split("-"); if (st.length === 2) rows.push({ quelle: "Start", anzahl: Number(st[0]) * 100 + Number(st[1]), preis: 0 });
   busy(btn, true);
   const { error } = await sb.from("finanz_ziele").upsert(rows);
   busy(btn, false);
