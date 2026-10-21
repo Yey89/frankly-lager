@@ -122,7 +122,7 @@ async function load() {
   STREET = fe.error ? [] : (fe.data || []);
   const kb = await sb.from("kombis").select("item_a,item_b");
   KOMBIS = kb.error ? [] : (kb.data || []);
-  LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length >= 2);
+  LOOKS = (c.error ? [] : (c.data || [])).map(l => Object.assign({}, l, { items: (l.look_items || []).slice().sort((x, y) => x.position - y.position).map(x => x.item_id).filter(id => ids.has(id)) })).filter(l => l.items.length >= 2 && l.style);
 }
 /* Fotos erst nach dem Anzeigen holen: zuerst die kleinen Vorschaubilder, wo keines existiert das Original */
 async function signPaths(paths) {
@@ -266,26 +266,29 @@ const OF = window.FRANKLY_OUTFIT, COMBO = {};
 function lookItems(l) { return l.items.map(id => ITEMS.find(x => x.id === id)).filter(Boolean); }
 function lookCombo(l) { const its = lookItems(l), c = (COMBO[l.id] || []).map(id => its.find(x => x.id === id)).filter(Boolean); return c.length ? c : OF.first(its); }
 function outfitUrl(it) { return it.cut_pfad && URLS[it.cut_pfad] ? { src: URLS[it.cut_pfad], cut: true } : { src: imgUrl(it.foto_pfad), cut: false }; }
-function collage(l) { return OF.html(lookCombo(l), outfitUrl, l.name); }
+/* Stil-Looks: Bild = Moodboard, nach «Neu kombinieren» eine Kombi aus den verknüpften Teilen */
+const STYLE_ORDER = ["FIERCE", "EDGY", "DREAMY", "AGILE"];
+function moodImg(l) { const u = (l.foto_pfad && imgUrl(l.foto_pfad)) || `stile/${String(l.style).toLowerCase()}.jpg`; return `<img class="mood" src="${esc(u)}" alt="Moodboard ${esc(l.style)}" loading="lazy">`; }
+function collage(l) { if (!COMBO[l.id]) return moodImg(l); const c = lookCombo(l); return c.length ? OF.html(c, outfitUrl, l.style) : moodImg(l); }
 function lookCard(l, combo) {
+  const its = lookItems(l), more = its.length - 8;
   return `
     <div class="look">
       <button class="card" type="button" data-look="${esc(l.id)}" style="gap:10px">
-        <div class="ph">${combo ? OF.html(combo, outfitUrl, l.name) : collage(l)}</div>
-        <span class="style">${esc(l.style || "")}</span>
-        <span class="lname">${esc(l.name)} · ${l.items.length} Teile</span>
+        <div class="ph">${combo ? OF.html(combo, outfitUrl, l.style) : collage(l)}</div>
+        <span class="style">${esc(l.style)}</span>
       </button>
-      ${!combo && OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-rollcard="${esc(l.id)}">↻ Neu kombinieren</button>` : ""}
+      ${!combo && OF.ok(its) ? `<div class="okombi" style="margin:0"><button class="btn" type="button" data-rollcard="${esc(l.id)}">↻ Neu kombinieren</button>${COMBO[l.id] ? `<button class="btn ghost" type="button" data-mood="${esc(l.id)}">Moodboard</button>` : ""}</div>` : ""}
+      ${!combo ? `<div class="thumbs">${its.slice(0, 8).map(it => `<button class="mini" type="button" data-item="${esc(it.nr)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>`).join("")}${more > 0 ? `<span class="hint">+ ${more} weitere</span>` : ""}</div>` : ""}
     </div>`;
 }
 /* Kombi, in der ein bestimmtes Teil vorkommt (für die Teil-Ansicht / QR-Code) */
 function comboWith(l, it) {
-  const its = lookItems(l); let c = lookCombo(l);
-  for (let i = 0; i < 40 && !c.some(x => x.id === it.id); i++) c = OF.shuffle(its, c);
-  return c.some(x => x.id === it.id) ? c : null;
+  const c = OF.shuffle(lookItems(l), null, it.id);
+  return c.length ? c : null;
 }
 function renderLooks() {
-  const own = `<h3 class="osec">Looks von Frankly</h3>` + (LOOKS.length ? `<div class="looks">${LOOKS.map(l => lookCard(l)).join("")}</div>` : `<p class="hint">Bald zeigen wir hier, wie du unsere Teile kombinieren kannst.</p>`);
+  const own = `<h3 class="osec">Looks von Frankly</h3>` + (LOOKS.length ? `<div class="looks">${LOOKS.slice().sort((a, b) => STYLE_ORDER.indexOf(a.style) - STYLE_ORDER.indexOf(b.style)).map(l => lookCard(l)).join("")}</div>` : `<p class="hint">Bald zeigen wir hier, wie du unsere Teile kombinieren kannst.</p>`);
   const street = `<h3 class="osec">Aus der Fotoecke</h3>` + (STREET.length ? `<div class="looks">${STREET.map(streetCard).join("")}</div>` : `<p class="hint">Hier erscheinen bald Fotos von euch. Probier im Laden, mach dein Foto in der Fotoecke und teile es mit uns: Dafür gibt es einen Gutschein.</p>`);
   $("lookGrid").innerHTML = own + street;
 }
@@ -326,7 +329,7 @@ function showItem(nr) {
         ${(it.stufe === "Lager" || it.stufe === "Online") && it.status === "Verfügbar" ? anfrageBox(it) : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
         ${o ? `<div class="box owner"><span class="klabel">Aus dem Kleiderschrank von</span><button class="linkbtn oname" type="button" data-owner="${esc(o.id)}">${esc(o.profilname)}</button>${o.stil ? `<p class="hint">${esc(o.stil)}</p>` : ""}</div>` : ""}
-        ${ls.length ? `<div class="sec">So kannst du es kombinieren</div><div class="looks">${ls.map(l => lookCard(l, comboWith(l, it))).join("")}</div>` : ""}
+        ${(() => { const cs = ls.map(l => [l, comboWith(l, it)]).filter(x => x[1]); return cs.length ? `<div class="sec">So kannst du es kombinieren</div><div class="looks">${cs.map(x => lookCard(x[0], x[1])).join("")}</div>` : ""; })()}
         ${kombiSection(it)}
         ${(() => { const fs = STREET.filter(f => streetItems(f).some(x => x.id === it.id)); return fs.length ? `<div class="sec">So wurde es getragen</div><div class="thumbs">${fs.map(f => `<button class="mini" type="button" data-street="${esc(f.id)}">${URLS["fe:" + f.pfad] ? `<img src="${esc(URLS["fe:" + f.pfad])}" alt="">` : ""}${esc(f.name || "Look")}</button>`).join("")}</div>` : ""; })()}
         ${visitBox()}
@@ -412,16 +415,14 @@ function showOwner(id) {
 }
 function showLook(id) {
   const l = LOOKS.find(x => x.id === id); if (!l) return;
-  const first = ITEMS.find(i => i.id === l.items[0]);
   openPanel(`
     <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
       <div><div class="big">${collage(l)}</div>
-        ${OF.count(lookItems(l)) > 1 ? `<div class="okombi"><button class="btn" type="button" data-roll="${esc(l.id)}">Neu kombinieren</button><span class="hint">Andere Kombi aus diesen Teilen</span></div>` : ""}</div>
+        ${OF.ok(lookItems(l)) ? `<div class="okombi"><button class="btn" type="button" data-roll="${esc(l.id)}">↻ Neu kombinieren</button>${COMBO[l.id] ? `<button class="btn ghost" type="button" data-moodp="${esc(l.id)}">Moodboard</button>` : `<span class="hint">Zeigt eine Kombi aus diesen Teilen</span>`}</div>` : ""}</div>
       <div>
-        <div class="style">${esc(l.style || "")}</div>
-        <h2 class="dt" style="margin-top:4px">${esc(l.name)}</h2>
-        <p class="desc">${esc(l.konzept || "")}</p>
+        <h2 class="dt style" style="margin-top:4px;font-size:28px">${esc(l.style)}</h2>
+        ${l.konzept ? `<p class="desc">${esc(l.konzept)}</p>` : ""}
         <div class="sec">Teile in diesem Look</div>
         <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? card(it) : ""; }).join("")}</div>
       </div>
@@ -543,8 +544,10 @@ document.addEventListener("click", e => {
   if (d.szshow !== undefined) { SHOWALL = !SHOWALL; return renderGrid(); }
   if (d.item) return showItem(d.item);
   if (d.look) return showLook(d.look);
-  if (d.rollcard) { const l = LOOKS.find(x => x.id === d.rollcard); if (l) { COMBO[l.id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id); renderLooks(); } return; }
-  if (d.roll) { const l = LOOKS.find(x => x.id === d.roll); if (l) { COMBO[l.id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id); showLook(l.id); renderLooks(); } return; }
+  if (d.rollcard) { const l = LOOKS.find(x => x.id === d.rollcard); if (l) { COMBO[l.id] = OF.shuffle(lookItems(l), COMBO[l.id] ? lookCombo(l) : null).map(x => x.id); renderLooks(); } return; }
+  if (d.mood) { delete COMBO[d.mood]; renderLooks(); return; }
+  if (d.moodp) { delete COMBO[d.moodp]; showLook(d.moodp); renderLooks(); return; }
+  if (d.roll) { const l = LOOKS.find(x => x.id === d.roll); if (l) { COMBO[l.id] = OF.shuffle(lookItems(l), COMBO[l.id] ? lookCombo(l) : null).map(x => x.id); showLook(l.id); renderLooks(); } return; }
   if (d.street) return showStreet(d.street);
   if (d.owner) return showOwner(d.owner);
   if (d.jkat) { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); return; }

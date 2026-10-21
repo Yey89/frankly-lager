@@ -289,3 +289,8 @@ table.fin td{border-bottom:1px solid var(--line);padding:8px 8px 8px 0;vertical-
 .lpparts{display:flex;flex-wrap:wrap;gap:3px}
 .lpparts img{width:22px;height:28px;object-fit:cover;display:block;border:1px solid var(--line)}
 .lpparts i{font-style:normal;font-family:var(--mono);font-size:10px}
+/* Stil-Looks: 4 feste Looks */
+.stilpick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:6px 0 10px}
+.stilbtn{font-family:var(--display);font-weight:800;font-stretch:125%;letter-spacing:.12em;font-size:14px;padding:12px 10px;border:2px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;text-align:left}
+.stilbtn[aria-pressed="true"]{border-color:var(--red);background:var(--red);color:#fff}
+.ph img.mood,.big img.mood{width:100%;height:100%;object-fit:cover;display:block}

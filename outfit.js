@@ -2,7 +2,8 @@
    0–100 FRANKLY · Outfit-Bild für Looks
    Ordnet die Teile eines Looks wie ein Outfit an
    (Jacke, Oberteil, Hose/Rock oder Kleid, Schuhe, Tasche, Accessoire)
-   und würfelt neue Kombinationen aus den Teilen eines Looks.
+   und würfelt neue Kombinationen aus den Teilen eines Stil-Looks:
+   Oberteil + Unterteil oder Kleid, dazu Schuhe und vielleicht eine Jacke (max. 4).
    Wird von Lager (app.js) und Shop (shop.js) benutzt.
    ========================================================= */
 "use strict";
@@ -32,42 +33,41 @@ window.FRANKLY_OUTFIT = (() => {
     items.forEach(it => g[slot(it)].push(it));
     return g;
   }
-  /* Grundlagen: Kleid ODER Oberteil + Unterteil (oder nur eines davon) */
+  /* Grundlage einer Kombi: Oberteil + Unterteil ODER Kleid (Hemdblusenkleid auch über Hose/Shorts).
+     Nie zwei Oberteile, nie zwei Unterteile. Ohne Grundlage keine Kombi. */
   function bases(g) {
     const b = [];
-    if (g.top.length && g.bottom.length) g.top.forEach(t => g.bottom.forEach(u => b.push([t, u])));
-    /* Hemdblusenkleid / Longshirt kann man auch über Hose oder Shorts tragen */
+    g.top.forEach(t => g.bottom.forEach(u => b.push([t, u])));
     g.dress.filter(d => SHIRTDRESS.test([d.unterkategorie, d.titel].join(" "))).forEach(d => g.bottom.forEach(u => b.push([d, u])));
     g.dress.forEach(d => b.push([d]));
-    if (!b.length) g.top.concat(g.bottom).forEach(x => b.push([x]));
-    if (!b.length && g.outer.length) b.push([]);
     return b;
   }
+  /* Höchstens 4 Teile: Grundlage + Schuhe (wenn vorhanden) + vielleicht eine Jacke */
   function count(items) {
-    const g = groups(items), n = bases(g).length || 1;
-    return n * (g.outer.length ? g.outer.length + 1 : 1) * (g.shoes.length || 1) * (g.bag.length ? g.bag.length + 1 : 1);
+    const g = groups(items), n = bases(g).length;
+    return n * (g.outer.length + 1) * (g.shoes.length || 1);
   }
-  /* Standard: das erste von jedem (Reihenfolge im Look) */
+  function ok(items) { return bases(groups(items)).length > 0; }
   function first(items) {
-    const g = groups(items), b = bases(g)[0] || [];
-    return b.concat(g.outer.slice(0, 1), g.shoes.slice(0, 1), g.bag.slice(0, 1), g.acc.slice(0, 1));
+    const g = groups(items), b = bases(g)[0];
+    return b ? b.concat(g.outer.slice(0, 1), g.shoes.slice(0, 1)) : [];
   }
   const pick = a => a[Math.floor(Math.random() * a.length)];
   function key(c) { return c.map(x => x.id).sort().join(","); }
-  /* Neue Kombination, möglichst anders als die aktuelle */
-  function shuffle(items, current) {
+  /* Neue Kombination, möglichst anders als die aktuelle. must = Teil, das drin sein soll (optional) */
+  function shuffle(items, current, must) {
     const g = groups(items), bs = bases(g), cur = current ? key(current) : "";
+    if (!bs.length) return [];
     let best = null;
-    for (let i = 0; i < 30; i++) {
-      const c = (pick(bs) || []).slice();
-      if (g.outer.length && (Math.random() < 0.7 || !c.length)) c.push(pick(g.outer));
+    for (let i = 0; i < 60; i++) {
+      const c = pick(bs).slice();
+      if (g.outer.length && Math.random() < 0.5) c.push(pick(g.outer));
       if (g.shoes.length) c.push(pick(g.shoes));
-      if (g.bag.length && Math.random() < 0.7) c.push(pick(g.bag));
-      if (g.acc.length && Math.random() < 0.5) c.push(pick(g.acc));
+      if (must && !c.some(x => x.id === must)) continue;
       best = c;
       if (key(c) !== cur) break;
     }
-    return best || first(items);
+    return best || (must ? [] : first(items));
   }
   /* Bild bauen: jedes Teil bekommt einen eigenen Platz, nichts überlappt.
      url(it) liefert {src, cut}: cut = freigestellt (durchsichtiger Hintergrund) */
@@ -100,5 +100,5 @@ window.FRANKLY_OUTFIT = (() => {
     }).join("");
     return `<span class="outfit" role="img" aria-label="${String(label || "Outfit").replace(/"/g, "&quot;")}">${imgs || `<span class="nofoto">Fotos fehlen</span>`}</span>`;
   }
-  return { slot, groups, count, first, shuffle, html };
+  return { slot, groups, count, ok, first, shuffle, html };
 })();

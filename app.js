@@ -14,7 +14,7 @@ const STUFEN = ["Stange", "Reduziert", "Upcycling", "Lager", "Online"];
 const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Monat 2 · Upcycling-Stange", Lager: "Monat 3 · Lager, auf Anfrage", Online: "Online-Stange · bei der Owner, Versand" };
 const ONLINE_NOTIZ = "Online weiterverkaufen";
 const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
-const STYLES = ["EDGY", "FIERCE", "DREAMY", "AGILE"];
+const STYLES = ["FIERCE", "EDGY", "DREAMY", "AGILE"];
 const BASE_CATS = ["Oberteile", "Tuniken", "Hosen", "Röcke", "Kleider", "Jacken", "Kimonos", "Schuhe", "Taschen", "Accessoires"];
 const FIELDS = [
   ["kategorie", "Kategorie"], ["unterkategorie", "Unterkategorie"], ["schnitt", "Schnitt"], ["farben", "Farben"],
@@ -73,35 +73,33 @@ function lookCombo(l) {
   const c = ids ? ids.map(id => its.find(x => x.id === id)).filter(Boolean) : [];
   return c.length ? c : OF.first(its);
 }
+/* Die 4 Stil-Looks: FIERCE, EDGY, DREAMY, AGILE. Bild = Moodboard (eigenes Foto oder Standardbild) */
+function styleLook(st) { return LOOKS.find(l => l.style === st); }
+function moodUrl(l, st) { return (l && l.foto_pfad && imgUrl(l.foto_pfad)) || `stile/${String(st || (l && l.style) || "fierce").toLowerCase()}.jpg`; }
+function moodImg(l, st) { return `<img class="mood" src="${esc(moodUrl(l, st))}" alt="Moodboard ${esc(st || l.style || "")}" loading="lazy">`; }
 function outfitUrl(it) { return it.cut_pfad && URLS[it.cut_pfad] ? { src: URLS[it.cut_pfad], cut: true } : { src: imgUrl(it.foto_pfad), cut: false }; }
 function collage(l) {
-  if (!l.items.length) return `<span class="nofoto">Noch keine Teile</span>`;
-  return OF.html(lookCombo(l), outfitUrl, l.name);
+  if (!COMBO[l.id]) return moodImg(l);
+  const c = lookCombo(l);
+  return c.length ? OF.html(c, outfitUrl, l.style) : moodImg(l);
 }
-/* Looks im Teil: anzeigen, hinzufügen, entfernen */
+/* Looks im Teil: 4 Stil-Knöpfe zum An- und Abwählen */
 function lookBlock(it) {
-  const ls = looksOf(it.id), others = LOOKS.filter(l => !l.items.includes(it.id));
-  /* Look-Auswahl als Karten mit Outfit-Bild und Teilen, damit man sieht, welcher Look welcher ist */
-  const card = (l, on) => `<button class="lpick" type="button" data-looksel="${esc(l.id)}" aria-pressed="${on}">
-      <span class="lpimg">${collage(l)}</span>
-      <span class="lptxt"><b>${esc(l.nr)}</b> ${esc(l.name)}<span class="lpparts">${lookItems(l).map(x => imgUrl(x.foto_pfad) ? `<img src="${esc(imgUrl(x.foto_pfad))}" alt="${esc(x.nr)}" title="${esc(x.nr + " " + (x.titel || ""))}">` : `<i>${esc(x.nr)}</i>`).join("")}</span></span></button>`;
-  const first = ls.length ? ls[0].id : "neu";
-  return `<div class="sec">Looks mit diesem Teil <span class="hint">· im Shop unter Looks</span></div>
-    ${ls.length ? `<div class="thumbs">${ls.map(l => `<span class="kombi"><button class="mini" type="button" data-look="${esc(l.id)}">${esc(l.nr)} · ${esc(l.name)} (${l.items.length} ${l.items.length === 1 ? "Teil" : "Teile"})</button><button class="btn ghost" type="button" data-lookrm="${esc(l.id)}" aria-label="Aus Look entfernen">✕</button></span>`).join("")}</div>` : `<p class="hint">Noch in keinem Look.</p>`}
-    <div class="box" style="margin-top:8px">
-      <div class="flabel">1. In welchen Look? <span class="hint">antippen</span></div>
-      <input type="hidden" id="lookSel" value="${esc(first)}">
-      ${LOOKS.length > 6 ? `<input class="search" id="lookFind" type="search" style="width:100%;margin:6px 0" placeholder="Look suchen: Nummer, Name oder Teil (z.B. Jeans)">` : ""}
-      <div class="lpicks" id="lookPicks">
-        <button class="lpick neu" type="button" data-looksel="neu" aria-pressed="${first === "neu"}"><span class="lpimg">+</span><span class="lptxt"><b>Neuer Look</b><span class="hint">bekommt die nächste Nummer</span></span></button>
-        ${ls.map(l => card(l, l.id === first)).join("")}${others.map(l => card(l, false)).join("")}
-      </div>
-      <span id="lookNameWrap" ${ls.length ? "hidden" : ""}><input class="search" id="lookName" style="width:100%;margin-top:6px" placeholder="Name des neuen Looks (freiwillig)" aria-label="Name des neuen Looks"></span>
-      <label style="margin-top:8px">2. Kombinieren mit: Teil suchen und antippen<input class="search" id="lookWith" type="search" style="width:100%" placeholder="Nummer, Titel, Farbe … z.B. Denim oder 7"></label>
-      <div class="thumbs" id="lookWithHits"></div>
-      <p class="hint">Beide Teile kommen in den gewählten Look. Bei «Neuer Look» entsteht eine neue Nummer.</p>
-      ${others.length ? `<div class="rowsmall"><button class="btn" type="button" data-lookadd="${esc(it.id)}">Nur dieses Teil zum Look hinzufügen</button></div>` : ""}
-    </div>`;
+  return `<div class="sec">Stil-Looks <span class="hint">· antippen: hinzufügen oder entfernen</span></div>
+    <div class="stilpick">${STYLES.map(st => { const l = styleLook(st), on = !!l && l.items.includes(it.id);
+      return `<button class="stilbtn" type="button" data-stil="${st}" aria-pressed="${on}">${on ? "✓" : "+"} ${st}</button>`; }).join("")}</div>`;
+}
+async function toggleStil(itemId, st, btn) {
+  let l = styleLook(st);
+  if (l && l.items.includes(itemId)) { await removeFromLook(l.id, itemId); toast(`Aus ${st} entfernt`); return; }
+  if (!l) {
+    busy(btn, true, "…");
+    const ins = await sb.from("looks").insert({ name: st, style: st, status: "Aktiv" }).select().single();
+    busy(btn, false);
+    if (ins.error) return toast(nice(ins.error), 4500);
+    l = Object.assign({}, ins.data, { items: [] }); LOOKS = LOOKS.concat(l);
+  }
+  await addToLook(itemId, l.id, null, btn);
 }
 function lookWithSearch(it) {
   const raw = ($("lookWith").value || "").trim().toLowerCase(), q = /^\d+$/.test(raw) ? "fr-" + raw.padStart(6, "0") : raw;
@@ -130,7 +128,7 @@ async function addToLook(itemId, lookId, name, btn) {
       if (error) throw error;
       LOOKS = LOOKS.map(x => x.id === l.id ? Object.assign({}, x, { items: x.items.concat(itemId) }) : x);
     }
-    renderAll(); toast(`Im ${l.nr}`);
+    renderAll(); toast(`Im Look ${l.style || l.nr}`);
     autoCut(itemId);
     return l.id;
   } catch (err) { toast(nice(err), 4500); return null; }
@@ -141,7 +139,7 @@ async function removeFromLook(lookId, itemId) {
   if (error) return toast(nice(error), 4500);
   LOOKS = LOOKS.map(x => x.id === lookId ? Object.assign({}, x, { items: x.items.filter(i => i !== itemId) }) : x);
   const l = LOOKS.find(x => x.id === lookId);
-  if (l && !l.items.length && !l.foto_pfad) { await sb.from("looks").delete().eq("id", lookId); LOOKS = LOOKS.filter(x => x.id !== lookId); toast(`${l.nr} war leer und wurde gelöscht`); }
+  if (l && !l.style && !l.items.length && !l.foto_pfad) { await sb.from("looks").delete().eq("id", lookId); LOOKS = LOOKS.filter(x => x.id !== lookId); toast(`${l.nr} war leer und wurde gelöscht`); }
   renderAll();
 }
 function lookSearch(l) {
@@ -435,17 +433,18 @@ function renderGrid() {
 }
 function renderLooks() {
   const lg = $("lookGrid");
-  if (!LOOKS.length) { lg.innerHTML = `<p class="empty">Noch keine Looks. Öffne ein Teil und tippe auf «Zu Look hinzufügen».</p>`; return; }
-  lg.innerHTML = LOOKS.map(l => `
+  lg.innerHTML = STYLES.map(st => {
+    const l = styleLook(st), its = l ? lookItems(l) : [], more = its.length - 12;
+    return `
     <div class="look">
-      <button class="card" type="button" data-look="${esc(l.id)}" style="gap:10px">
-        <div class="ph">${collage(l)}<span class="tag">${esc(l.nr)}</span></div>
-        <span class="style">${esc(l.style || "")}</span>
-        <span class="lname">${esc(l.name)} · ${l.items.length} ${l.items.length === 1 ? "Teil" : "Teile"}</span>
+      <button class="card" type="button" ${l ? `data-look="${esc(l.id)}"` : `data-stilneu="${st}"`} style="gap:10px">
+        <div class="ph">${l ? collage(l) : moodImg(null, st)}</div>
+        <span class="lname">${st} <span class="hint">· ${its.length} ${its.length === 1 ? "Teil" : "Teile"}</span></span>
       </button>
-      ${OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-lookrollcard="${esc(l.id)}">↻ Neu kombinieren</button>` : ""}
-      <div class="thumbs">${l.items.map(id => { const it = ITEMS.find(x => x.id === id); return it ? `<button class="mini" type="button" data-item="${esc(id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>` : ""; }).join("")}</div>
-    </div>`).join("");
+      ${l && OF.ok(its) ? `<div class="rowsmall" style="margin:0"><button class="btn" type="button" data-lookrollcard="${esc(l.id)}">↻ Neu kombinieren</button>${COMBO[l.id] ? `<button class="btn ghost" type="button" data-lookmood="${esc(l.id)}">Moodboard</button>` : ""}</div>` : (its.length ? `<span class="hint">Für «Neu kombinieren» braucht es ein Oberteil + Unterteil oder ein Kleid.</span>` : "")}
+      <div class="thumbs">${its.slice(0, 12).map(it => `<button class="mini" type="button" data-item="${esc(it.id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)}</button>`).join("")}${more > 0 ? `<span class="hint">+ ${more} weitere</span>` : ""}</div>
+    </div>`;
+  }).join("");
 }
 function renderOwners() {
   const og = $("ownerGrid");
@@ -1328,45 +1327,47 @@ async function anmAction(kind, btn) {
 /* ---------- Look anzeigen ---------- */
 function showLook(id) {
   const l = LOOKS.find(x => x.id === id); if (!l) return;
+  const its = lookItems(l), n = OF.count(its);
   openPanel(`
-    <div class="phead"><span class="sub">Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
+    <div class="phead"><span class="sub">Stil-Look</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <div class="d">
       <div><div class="big" id="lookBig">${collage(l)}</div>
-        <div class="okombi">${OF.count(lookItems(l)) > 1 ? `<button class="btn" type="button" data-lookroll="${esc(l.id)}">Neu kombinieren</button><span class="hint">${OF.count(lookItems(l))} Kombis möglich</span>` : `<span class="hint">«Neu kombinieren» erscheint, sobald der Look mehr Teile hat (z.B. 2 Oberteile oder eine Jacke).</span>`}
-        <button class="btn" type="button" data-lookasnew="${esc(l.id)}" ${lookCombo(l).length === l.items.length ? "hidden" : ""}>Diese Kombi als neuen Look speichern</button></div>
-        ${(() => { const n = lookItems(l).filter(it => it.foto_pfad && !it.cut_pfad).length; return n ? `<div class="okombi"><button class="btn primary" type="button" data-lookcut="${esc(l.id)}">${n} ${n === 1 ? "Teil" : "Teile"} freistellen</button><span class="hint">Hintergrund automatisch entfernen. Beim ersten Mal lädt das Programm etwa 1 Minute.</span></div>` : ""; })()}
+        <div class="okombi">${OF.ok(its) ? `<button class="btn" type="button" data-lookroll="${esc(l.id)}">↻ Neu kombinieren</button>${COMBO[l.id] ? `<button class="btn ghost" type="button" data-lookmood="${esc(l.id)}">Moodboard zeigen</button>` : ""}<span class="hint">${n} Kombis möglich</span>` : `<span class="hint">«Neu kombinieren» braucht mindestens ein Oberteil + ein Unterteil oder ein Kleid.</span>`}</div>
+        <div class="okombi"><label class="btn" for="moodFile">Moodboard-Bild ${l.foto_pfad ? "ändern" : "hochladen"}</label><input id="moodFile" type="file" accept="image/*" hidden>${l.foto_pfad ? "" : `<span class="hint">Jetzt: Standardbild</span>`}</div>
+        ${(() => { const k = its.filter(it => it.foto_pfad && !it.cut_pfad).length; return k ? `<div class="okombi"><button class="btn primary" type="button" data-lookcut="${esc(l.id)}">${k} ${k === 1 ? "Teil" : "Teile"} freistellen</button><span class="hint">Hintergrund automatisch entfernen. Beim ersten Mal lädt das Programm etwa 1 Minute.</span></div>` : ""; })()}
       </div>
       <div>
-        <div class="nr"><small>Look</small>${esc(l.nr)}</div>
-        <div class="two" style="margin-top:12px"><label>Name<input class="search" id="lk-name" value="${esc(l.name)}"></label>
-        <label>Stil-Energie<select class="search" id="lk-style"><option value="">–</option>${STYLES.map(st => `<option ${st === l.style ? "selected" : ""}>${st}</option>`).join("")}</select></label></div>
-        <div class="rowsmall"><button class="btn" type="button" data-looksave="${esc(l.id)}">Speichern</button></div>
-        <div class="sec">Teile in diesem Look · ${l.items.length}</div>
-        <div class="thumbs">${l.items.map(iid => { const it = ITEMS.find(x => x.id === iid); return it ? `<span class="kombi"><button class="mini" type="button" data-item="${esc(it.id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)} ${esc(it.titel)} · ${SLOT_TXT[OF.slot(it)]}</button><button class="btn ghost" type="button" data-lookout="${esc(it.id)}" aria-label="Aus Look entfernen">✕</button></span>` : ""; }).join("")}</div>
+        <h2 class="dt" style="margin:0">${esc(l.style || l.name)}</h2>
+        <div class="sec">Verknüpfte Teile · ${its.length}</div>
+        <div class="thumbs">${its.map(it => `<span class="kombi"><button class="mini" type="button" data-item="${esc(it.id)}">${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : ""}${esc(it.nr)} ${esc(it.titel)} · ${SLOT_TXT[OF.slot(it)]}</button><button class="btn ghost" type="button" data-lookout="${esc(it.id)}" aria-label="Aus Look entfernen">✕</button></span>`).join("")}</div>
         <div class="kombiadd"><input class="search" id="lookQ" type="search" placeholder="Teil hinzufügen: Nummer, Titel, Farbe …" aria-label="Teil für diesen Look suchen"><div class="thumbs" id="lookHits"></div></div>
-        <div class="row"><button class="btn danger" type="button" data-dellook="${esc(l.id)}">Look löschen</button></div>
-        <p class="hint">Die Rolle (Oberteil, Unterteil, Jacke …) kommt von der Kategorie des Teils. Stimmt sie nicht, ändere die Kategorie beim Teil. Beim Löschen eines Looks bleiben die Teile erhalten.</p>
+        <p class="hint">«Neu kombinieren» nimmt immer: Oberteil + Unterteil (oder ein Kleid), dazu Schuhe und manchmal eine Jacke. Höchstens 4 Teile. Taschen und Accessoires kommen nicht ins Kombi-Bild. Die Rolle kommt von der Kategorie des Teils.</p>
       </div>
     </div>`, { type: "look", id });
   const q = $("lookQ"); if (q) q.addEventListener("input", () => lookSearch(l));
+  const mf = $("moodFile"); if (mf) mf.addEventListener("change", () => { if (mf.files[0]) saveMood(l.id, mf.files[0]); mf.value = ""; });
+}
+async function saveMood(id, file) {
+  try {
+    toast("Moodboard wird hochgeladen …", 4000);
+    const blob = await resizeImage(file), path = `looks-neu/${id}-${Date.now()}.jpg`;
+    await uploadPhoto(path, blob);
+    const { data, error } = await sb.from("looks").update({ foto_pfad: path, status: "Fotografiert" }).eq("id", id).select().single();
+    if (error) throw error;
+    LOOKS = LOOKS.map(x => x.id === id ? Object.assign({}, x, data) : x); delete COMBO[id];
+    renderAll(); showLook(id); toast("Moodboard gespeichert");
+  } catch (err) { toast(nice(err), 4500); }
 }
 function rollLook(id) {
   const l = LOOKS.find(x => x.id === id); if (!l) return;
-  COMBO[id] = OF.shuffle(lookItems(l), lookCombo(l)).map(x => x.id);
+  COMBO[id] = OF.shuffle(lookItems(l), COMBO[id] ? lookCombo(l) : null).map(x => x.id);
   if (panelState && panelState.type === "look" && panelState.id === id) showLook(id);
   renderLooks();
 }
-async function comboAsNew(id, btn) {
-  const l = LOOKS.find(x => x.id === id); if (!l) return;
-  const c = lookCombo(l);
-  busy(btn, true, "…");
-  const ins = await sb.from("looks").insert({ name: c.map(x => x.titel).join(" + ").slice(0, 120) || "Look", style: l.style || null, status: "Aktiv" }).select().single();
-  if (ins.error) { busy(btn, false); return toast(nice(ins.error), 4500); }
-  const rows = c.map((x, i) => ({ look_id: ins.data.id, item_id: x.id, position: i + 1 }));
-  const r = await sb.from("look_items").insert(rows);
-  if (r.error) { busy(btn, false); return toast(nice(r.error), 4500); }
-  LOOKS = [Object.assign({}, ins.data, { items: c.map(x => x.id) })].concat(LOOKS);
-  renderAll(); showLook(ins.data.id); toast(`${ins.data.nr} gespeichert`);
+function moodLook(id) {
+  delete COMBO[id];
+  if (panelState && panelState.type === "look" && panelState.id === id) showLook(id);
+  renderLooks();
 }
 /* Freistellen: Hintergrund im Browser entfernen (kostenlos, @imgly/background-removal, AGPL) */
 let BGRM = null;
@@ -1638,10 +1639,11 @@ document.addEventListener("click", e => {
   if (d.lookrm && panelState) { const iid = panelState.id; removeFromLook(d.lookrm, iid).then(() => showItem(iid)); return; }
   if (d.lookput && panelState) { const lid = panelState.id; addToLook(d.lookput, lid, null, b).then(() => showLook(lid)); return; }
   if (d.lookout && panelState) { const lid = panelState.id; removeFromLook(lid, d.lookout).then(() => { if (LOOKS.some(x => x.id === lid)) showLook(lid); else closePanel(); }); return; }
-  if (d.looksave) return saveLookMeta(d.looksave, b);
   if (d.lookroll) return rollLook(d.lookroll);
   if (d.lookrollcard) return rollLook(d.lookrollcard);
-  if (d.lookasnew) return comboAsNew(d.lookasnew, b);
+  if (d.lookmood) return moodLook(d.lookmood);
+  if (d.stil && panelState && panelState.type === "item") { const iid = panelState.id; toggleStil(iid, d.stil, b).then(() => { if (panelState && panelState.id === iid) showItem(iid); }); return; }
+  if (d.stilneu) return toast("Öffne ein Teil und tippe auf «+ " + d.stilneu + "»", 4000);
   if (d.lookcut) { const l = LOOKS.find(x => x.id === d.lookcut); if (l) cutMany(lookItems(l).filter(it => it.foto_pfad && !it.cut_pfad), b, () => showLook(l.id)); return; }
   if (d.xdel !== undefined && panelState) return delExtraFoto(panelState.id, Number(d.xdel), b);
   if (d.kombidel) return kombiDel(d.kombidel);
