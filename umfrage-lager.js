@@ -7,13 +7,15 @@
    ========================================================= */
 "use strict";
 
-let UST = [], UANT = [], UAUS = {}, uState = "idle", uView = "stuecke", uSort = "neu", uDel = null;
+let UST = [], UANT = [], UAUS = {}, uState = "idle", uView = "stuecke", uSort = "neu", uDel = null, uArt = "kleid";
 const U_MAX_MB = 50;
 const U_FRAGEN = [
   ["kaschieren", "Was kaschierst du?"], ["betonen", "Was betonst du gerne?"], ["nie_im_laden", "Was findest du nie im Laden?"],
   ["mehr_zahlen", "Wofür zahlst du gerne mehr?"], ["stil", "Welcher Stil bist du?"], ["groesse", "Grösse"],
   ["nervt", "Was nervt beim Secondhand-Einkaufen?"], ["zeit", "Wann Zeit zum Einkaufen?"], ["mieten", "Was würdest du mieten?"],
-  ["verkaufen", "Würdest du bei uns verkaufen?"]
+  ["verkaufen", "Würdest du bei uns verkaufen?"],
+  ["rework_mut", "Rework: Wie mutig darf es sein?"], ["rework_art", "Rework: Welche Umgestaltung würdest du tragen?"],
+  ["rework_mehr", "Rework: Wie viel mehr würdest du zahlen?"]
 ];
 
 (function css() {
@@ -61,13 +63,15 @@ function renderUmfrage(reload) {
   if (uState === "missing") { el.innerHTML = `<p class="hint" style="margin-top:14px">Bitte zuerst 22_umfrage.sql in Supabase ausführen.</p>`; return; }
   if (uState === "loading" && !UST.length && !UANT.length) { el.innerHTML = `<p class="loading">Umfrage wird geladen …</p>`; return; }
   const verl = UANT.filter(a => a.verlosung && a.kontakt);
-  const tabs = [["stuecke", `Stücke (${UST.length})`], ["antworten", `Antworten (${UANT.length})`], ["kauf", `Kaufanfragen${offen ? ` (${offen})` : ""}`], ["verlosung", `Verlosung (${verl.length})`]];
+  const nK = UST.filter(x => x.art !== "rework").length, nR = UST.length - nK;
+  const tabs = [["stuecke", `Kleider (${nK})`], ["rework", `Rework-Ideen (${nR})`], ["antworten", `Antworten (${UANT.length})`], ["kauf", `Kaufanfragen${offen ? ` (${offen})` : ""}`], ["verlosung", `Verlosung (${verl.length})`]];
   el.innerHTML = `
     <div class="tools" style="justify-content:space-between">
-      <span class="hint" style="flex:1 1 280px;max-width:64ch">Eigene Stücke für die Umfrage, unabhängig von den Lager-Teilen. Videos oder Fotos hochladen, höchstens ${U_MAX_MB} MB pro Datei. Kurze, kleine Videos laden für die Leute viel schneller.</span>
+      <span class="hint" style="flex:1 1 280px;max-width:64ch">Eigene Stücke für die Umfrage, unabhängig von den Lager-Teilen. <b>Kleider</b>: Videos oder Fotos zum Swipen. <b>Rework-Ideen</b>: Bilder oder Skizzen, wie ein Teil umgestaltet aussehen könnte (eigene Swipe-Runde). Höchstens ${U_MAX_MB} MB pro Datei.</span>
       <span class="urow">
         <a class="btn ghost" href="umfrage.html" target="_blank" rel="noopener">Umfrage ansehen</a>
-        <label class="btn primary" style="cursor:pointer">+ Videos / Fotos hochladen<input type="file" id="uFiles" accept="video/*,image/*" multiple hidden></label>
+        <label class="btn" style="cursor:pointer">+ Rework-Ideen<input type="file" id="uFilesR" accept="image/*,video/*" multiple hidden></label>
+        <label class="btn primary" style="cursor:pointer">+ Kleider-Videos / Fotos<input type="file" id="uFiles" accept="video/*,image/*" multiple hidden></label>
       </span>
     </div>
     <p class="uprog" id="uProg"></p>
@@ -76,18 +80,21 @@ function renderUmfrage(reload) {
       <span class="rowsmall" style="margin:0 0 0 auto"><input class="search" id="uCode" placeholder="Gutschein, z.B. FRANKLY-7K3MZ" aria-label="Gutschein-Code"><button class="btn" type="button" id="uCodeBtn">Einlösen</button></span>
     </div>
     <div id="uBody"></div>`;
-  $("uFiles").onchange = e => upload([...e.target.files]);
+  $("uFiles").onchange = e => upload([...e.target.files], "kleid");
+  $("uFilesR").onchange = e => upload([...e.target.files], "rework");
   const body = $("uBody");
-  if (uView === "stuecke") body.innerHTML = stueckeHtml();
+  if (uView === "stuecke") body.innerHTML = stueckeHtml("kleid");
+  if (uView === "rework") body.innerHTML = stueckeHtml("rework");
   if (uView === "antworten") body.innerHTML = antwortenHtml();
   if (uView === "kauf") body.innerHTML = kaufHtml();
   if (uView === "verlosung") body.innerHTML = verlosungHtml(verl);
 }
 
 /* ---------- Stücke ---------- */
-function stueckeHtml() {
-  if (!UST.length) return `<p class="empty">Noch keine Stücke. Lade oben deine Videos oder Fotos hoch.</p>`;
-  const list = UST.slice();
+function stueckeHtml(art) {
+  const RW = art === "rework";
+  const list = UST.filter(x => RW ? x.art === "rework" : x.art !== "rework");
+  if (!list.length) return RW ? `<p class="empty">Noch keine Rework-Ideen. Lade oben mit «+ Rework-Ideen» Bilder oder Skizzen hoch. Solange keine da sind, sehen die Leute in der Umfrage nur die 3 Rework-Fragen.</p>` : `<p class="empty">Noch keine Kleider. Lade oben deine Videos oder Fotos hoch.</p>`;
   if (uSort === "beliebt") list.sort((x, y) => ((UAUS[y.id] || {}).ja || 0) - ((UAUS[x.id] || {}).ja || 0));
   if (uSort === "unbeliebt") list.sort((x, y) => ((UAUS[y.id] || {}).nein || 0) - ((UAUS[x.id] || {}).nein || 0));
   return `<div class="chips" style="margin:0 0 10px">${[["neu", "Neueste"], ["beliebt", "Am meisten Ja"], ["unbeliebt", "Am meisten Nein"]].map(([k, l]) => `<button class="chip" type="button" data-usort="${k}" aria-pressed="${k === uSort}">${l}</button>`).join("")}</div>
@@ -97,14 +104,14 @@ function stueckeHtml() {
     return `<div class="ucard ${s.aktiv ? "" : "off"}">${media}<div class="ub">
       <b>${esc(s.nr)}</b>
       <input type="text" data-utitel="${esc(s.id)}" value="${esc(s.titel || "")}" placeholder="Titel, z.B. Lederjacke" maxlength="120" aria-label="Titel">
-      <input type="text" data-ugr="${esc(s.id)}" value="${esc(s.groesse || "")}" placeholder="Grösse" maxlength="20" aria-label="Grösse">
-      <span class="ust">${a.ja || a.nein ? `<b>${a.ja || 0}× Ja</b> · ${a.nein || 0}× Nein · ${a.ja_prozent ?? 0} %<br>Fairer Preis: <b>${a.fairer_preis ? "CHF " + esc(a.fairer_preis) : "–"}</b><br>Alltag ${a.alltag || 0} · Anlass ${a.besonderer_anlass || 0} · Mieten ${a.lieber_mieten || 0}` : "Noch keine Antworten"}</span>
+      ${RW ? `<select data-ustil="${esc(s.id)}" aria-label="Stil der Idee" style="width:100%;border:1px solid var(--line);background:var(--bg);padding:6px 8px">${[["", "Stil wählen"], ["Alltag", "Alltag"], ["Twist", "Mit Twist"], ["Statement", "Statement"]].map(([v, l]) => `<option value="${v}" ${(s.rework_stil || "") === v ? "selected" : ""}>${l}</option>`).join("")}</select>` : `<input type="text" data-ugr="${esc(s.id)}" value="${esc(s.groesse || "")}" placeholder="Grösse" maxlength="20" aria-label="Grösse">`}
+      <span class="ust">${a.ja || a.nein ? `<b>${a.ja || 0}× Ja</b> · ${a.nein || 0}× Nein · ${a.ja_prozent ?? 0} %<br>${RW ? "Würde zahlen" : "Fairer Preis"}: <b>${a.fairer_preis ? "CHF " + esc(a.fairer_preis) : "–"}</b><br>${RW ? `Alltag ${a.alltag || 0} · Twist ${a.twist || 0} · Statement ${a.statement || 0}` : `Alltag ${a.alltag || 0} · Anlass ${a.besonderer_anlass || 0} · Mieten ${a.lieber_mieten || 0}`}` : "Noch keine Antworten"}</span>
       <label class="ust"><input type="checkbox" data-uaktiv="${esc(s.id)}" ${s.aktiv ? "checked" : ""}> In der Umfrage zeigen</label>
       <button class="btn" type="button" data-udel="${esc(s.id)}">${uDel === s.id ? "Wirklich löschen?" : "Löschen"}</button>
     </div></div>`;
   }).join("")}</div>`;
 }
-async function upload(files) {
+async function upload(files, art) {
   const prog = $("uProg"); let ok = 0, skip = [];
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
@@ -115,10 +122,12 @@ async function upload(files) {
     const up = await sb.storage.from("umfrage").upload(path, f, { contentType: f.type || undefined, upsert: false });
     if (up.error) { skip.push(f.name); continue; }
     const typ = (f.type || "").startsWith("image/") ? "foto" : "video";
-    const ins = await sb.from("umfrage_stuecke").insert({ medien_pfad: path, typ }).select().single();
+    const ins = await sb.from("umfrage_stuecke").insert(art === "rework" ? { medien_pfad: path, typ, art } : { medien_pfad: path, typ }).select().single();
     if (ins.error) { skip.push(f.name); continue; }
     UST.unshift(ins.data); ok++;
   }
+  if (art === "rework" && ok && uView !== "rework") uView = "rework";
+  if (art !== "rework" && ok && uView !== "stuecke") uView = "stuecke";
   prog.textContent = `${ok} hochgeladen.` + (skip.length ? ` Nicht geklappt oder grösser als ${U_MAX_MB} MB: ${skip.join(", ")}` : "");
   const keep = prog.textContent; renderUmfrage(); $("uProg").textContent = keep;
 }
@@ -222,5 +231,6 @@ document.addEventListener("change", e => {
   if (t.dataset.utitel) return saveSt(t.dataset.utitel, { titel: t.value.trim() || null });
   if (t.dataset.ugr) return saveSt(t.dataset.ugr, { groesse: t.value.trim() || null });
   if (t.dataset.uaktiv) return saveSt(t.dataset.uaktiv, { aktiv: t.checked });
+  if (t.dataset.ustil) return saveSt(t.dataset.ustil, { rework_stil: t.value || null });
 });
 window.renderUmfrage = renderUmfrage;

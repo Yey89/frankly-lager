@@ -28,8 +28,24 @@ const T = {
     lead: "Drei Wochen lang hatten wir unseren Secondhand-Pop-up. Jetzt ziehen wir um und machen weiter. Damit wir das Sortiment genau für dich vorbereiten können und du am meisten davon hast, machen wir diese kleine Umfrage.",
     winH: "Dein Win",
     win: [`<b>CHF ${GUTSCHEIN_CHF} Gutschein</b> auf alle Frankly-Teile, direkt am Schluss.`, "<b>Verlosung:</b> 1 Jahr Mitgliedschaft «Frankly Friends» (Wert CHF 120).", "Ein Sortiment, das zu dir passt."],
-    how: [["1", "10 kurze Fragen zu dir und deinem Stil."], ["2", "Swipe dich durch unsere Teile: rechts = will ich, links = nein danke."], ["3", "Am Schluss: Was fehlt dir noch?"]],
-    dauer: "Dauer: ca. 5 Minuten. Du kannst jederzeit aufhören.",
+    how: [["1", "10 kurze Fragen zu dir und deinem Stil."], ["2", "Swipe dich durch unsere Teile: rechts = will ich, links = nein danke."], ["3", "Rework: Wie sollen alte Teile neu aussehen?"], ["4", "Am Schluss: Was fehlt dir noch?"]],
+    dauer: "Dauer: ca. 6 Minuten. Du kannst jederzeit aufhören.",
+    rwKick: "Frankly Rework",
+    rwH: "Aus alt wird <span>neu.</span>",
+    rwP: "Teile, die keiner mehr will, gestalten wir neu: kürzen, färben, kombinieren, verzieren. Jedes Stück bleibt ein Unikat. Was würdest du davon tragen?",
+    rwSwipe: "Zuerst ein paar Ideen zum Swipen, danach 3 kurze Fragen.",
+    rwGo: "Rework-Ideen ansehen", rwFragenGo: "Weiter",
+    rwPopH: "Gefällt dir!",
+    rwPopTragen: "Wie würdest du es tragen?",
+    rwTragen: { Alltag: "Im Alltag", Twist: "Mit Twist, aber tragbar", Statement: "Als Statement-Teil" },
+    rwPopPreis: "Was würdest du dafür zahlen? (CHF)",
+    rwQ: [
+      ["rework_mut", "single", "Wie mutig darf ein umgestaltetes Teil sein?"],
+      ["rework_art", "multi", "Welche Umgestaltung würdest du tragen?"],
+      ["rework_mehr", "single", "Wie viel mehr würdest du für ein umgestaltetes Teil bezahlen als für das Original?"]
+    ],
+    rwFragenH: "3 Fragen zu Rework",
+    rwMehrfach: "Mehrere Antworten möglich.",
     start: "Los geht's", weiter: "Weiter", zurueck: "Zurück", skip: "Überspringen",
     frage: "Frage {n} von {m}", anderes: "Anderes (optional)", oben: "Oben", unten: "Unten", waehlen: "wählen",
     bis2: "Wähle bis zu 2.",
@@ -78,8 +94,24 @@ const T = {
     lead: "For three weeks we ran our second-hand pop-up. Now we're moving and carrying on. So we can prepare the right selection for you and you get the most out of it, we're doing this short survey.",
     winH: "Your win",
     win: [`<b>CHF ${GUTSCHEIN_CHF} voucher</b> on all Frankly pieces, right at the end.`, "<b>Prize draw:</b> 1 year of «Frankly Friends» membership (worth CHF 120).", "A selection that fits you."],
-    how: [["1", "10 short questions about you and your style."], ["2", "Swipe through our pieces: right = want it, left = no thanks."], ["3", "At the end: what's still missing?"]],
-    dauer: "Takes about 5 minutes. You can stop at any time.",
+    how: [["1", "10 short questions about you and your style."], ["2", "Swipe through our pieces: right = want it, left = no thanks."], ["3", "Rework: how should old pieces look new?"], ["4", "At the end: what's still missing?"]],
+    dauer: "Takes about 6 minutes. You can stop at any time.",
+    rwKick: "Frankly Rework",
+    rwH: "Old becomes <span>new.</span>",
+    rwP: "Pieces nobody wants anymore, we redesign: cropping, dyeing, combining, embellishing. Every piece stays one of a kind. What would you wear?",
+    rwSwipe: "First a few ideas to swipe, then 3 short questions.",
+    rwGo: "See rework ideas", rwFragenGo: "Next",
+    rwPopH: "You like it!",
+    rwPopTragen: "How would you wear it?",
+    rwTragen: { Alltag: "Every day", Twist: "With a twist, but wearable", Statement: "As a statement piece" },
+    rwPopPreis: "What would you pay for it? (CHF)",
+    rwQ: [
+      ["rework_mut", "single", "How bold may a reworked piece be?"],
+      ["rework_art", "multi", "Which rework would you wear?"],
+      ["rework_mehr", "single", "How much more would you pay for a reworked piece than for the original?"]
+    ],
+    rwFragenH: "3 questions about rework",
+    rwMehrfach: "Several answers possible.",
     start: "Let's go", weiter: "Next", zurueck: "Back", skip: "Skip",
     frage: "Question {n} of {m}", anderes: "Other (optional)", oben: "Top", unten: "Bottom", waehlen: "choose",
     bis2: "Choose up to 2.",
@@ -164,11 +196,16 @@ const STILE = [
   { key: "AGILE", img: "stile/agile.jpg", w: L2("sportlich, bequem, clean, Basics", "sporty, comfy, clean, basics") }
 ];
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+const RW_OPT = {
+  rework_mut: O(["Dezent: man sieht es kaum", "Mit Twist: ein besonderes Detail", "Statement: auffällig und einzigartig"], ["Subtle: you barely notice", "With a twist: one special detail", "Statement: bold and unique"]),
+  rework_art: O(["Kürzen (z.B. Crop-Top, kurze Jacke)", "Neue Knöpfe oder Details", "Einfärben (z.B. alles schwarz)", "Patchwork aus verschiedenen Stoffen", "Ärmel oder Ausschnitt verändern", "Stickerei oder Print", "Details aus Seil oder Paracord", "Aus zwei Teilen wird eines"], ["Cropping (e.g. crop top, short jacket)", "New buttons or details", "Dyeing (e.g. all black)", "Patchwork from different fabrics", "Changing sleeves or neckline", "Embroidery or print", "Rope or paracord details", "Two pieces become one"]),
+  rework_mehr: O(["Nichts mehr", "bis CHF 10 mehr", "bis CHF 20 mehr", "bis CHF 40 mehr", "mehr als CHF 40"], ["Nothing more", "up to CHF 10 more", "up to CHF 20 more", "up to CHF 40 more", "more than CHF 40"])
+};
 
 /* ---------- Zustand (wird im Browser gemerkt, falls die Seite neu lädt) ---------- */
-const KEY = "frankly-umfrage-v2";
+const KEY = "frankly-umfrage-v3";
 let S = load() || neu();
-function neu() { return { step: "intro", q: 0, antworten: {}, swipes: [], idx: 0, order: null, fehlt: "", kauf: [], name: "", kontakt: "", verlosung: false, code: null, hatKauf: false }; }
+function neu() { return { step: "intro", q: 0, antworten: {}, swipes: [], idx: 0, order: null, ridx: 0, rorder: null, fehlt: "", kauf: [], name: "", kontakt: "", verlosung: false, code: null, hatKauf: false }; }
 function load() { try { const v = JSON.parse(localStorage.getItem(KEY) || "null"); return v && v.step ? v : null; } catch (e) { return null; } }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
@@ -184,8 +221,13 @@ async function loadItemsNow() {
     ITEMS = Array.isArray(r.data) ? r.data : [];
     ITEMS.forEach(i => { BYID[i.id] = i; });
     // Reihenfolge einmal festlegen und merken
-    if (!S.order) { S.order = ITEMS.map(i => i.id); save(); }
-    else { const known = new Set(S.order); ITEMS.forEach(i => { if (!known.has(i.id)) S.order.push(i.id); }); S.order = S.order.filter(id => BYID[id]); save(); }
+    const fill = (key, list) => {
+      if (!S[key]) S[key] = list.map(i => i.id);
+      else { const known = new Set(S[key]); list.forEach(i => { if (!known.has(i.id)) S[key].push(i.id); }); S[key] = S[key].filter(id => BYID[id]); }
+    };
+    fill("order", ITEMS.filter(i => i.art !== "rework"));
+    fill("rorder", ITEMS.filter(i => i.art === "rework"));
+    save();
     loadState = "ok";
   } catch (e) { loadState = "error"; }
 }
@@ -202,7 +244,7 @@ function mediaHtml(it, mode) {
 /* ---------- Ansichten ---------- */
 function render() {
   window.scrollTo(0, 0); app.oninput = app.onchange = null;
-  ({ intro, fragen, swipeIntro, swipe, ende, danke }[S.step] || intro)();
+  ({ intro, fragen, swipeIntro, swipe, rswipe: swipe, reworkIntro, reworkFragen, ende, danke }[S.step] || intro)();
 }
 function go(step) { S.step = step; save(); render(); }
 
@@ -279,29 +321,34 @@ function swipeIntro() {
 
 /* ---------- Swipe ---------- */
 async function swipe() {
+  const step = S.step, RW = step === "rswipe";
+  const IX = RW ? "ridx" : "idx", after = RW ? "reworkFragen" : "reworkIntro";
   if (loadState !== "ok" && loadState !== "error") {
     app.innerHTML = `<p class="muted">${T.laden}</p>`;
     await loadItems();
-    if (S.step !== "swipe") return;
+    if (S.step !== step) return;
   }
-  const order = S.order || [];
+  const order = (RW ? S.rorder : S.order) || [];
   if (loadState === "error" || !order.length) {
+    if (RW) { go(after); return; }
     app.innerHTML = `<p>${loadState === "error" ? T.ladeFehler : T.leer}</p><div class="row"><button class="btn primary" id="on">${T.weiter}</button></div>`;
-    $("on").onclick = () => go("ende"); return;
+    $("on").onclick = () => go(after); return;
   }
-  if (S.idx >= order.length) { go("ende"); return; }
-  const cur = BYID[order[S.idx]], nxt = BYID[order[S.idx + 1]];
+  if (S[IX] >= order.length) { go(after); return; }
+  const mine = S.swipes.filter(x => RW ? x.art === "rework" : x.art !== "rework");
+  const cur = BYID[order[S[IX]]], nxt = BYID[order[S[IX] + 1]];
   const cardHtml = (it, cls) => it ? `<div class="card ${cls}" ${cls === "top" ? 'id="card"' : ""}>
       <div class="ph">${mediaHtml(it, cls === "top" ? "play" : "still")}</div>
       <div class="info"><b>${esc(label(it))}</b><small>${it.groesse ? esc(tx("groesse", { g: it.groesse })) : ""}</small></div>
       ${cls === "top" ? `<div class="stamp yes">${T.stampJa}</div><div class="stamp no">${T.stampNein}</div>` : ""}
     </div>` : "";
   app.innerHTML = `
-    <div class="under" style="margin:0 0 6px"><span class="cnt">${tx("von", { n: S.idx + 1, m: order.length })}</span>${S.swipes.length ? `<button class="btn ghost" id="undo">${T.undo}</button>` : ""}</div>
-    <div class="bar"><i style="width:${Math.round(S.idx / order.length * 100)}%"></i></div>
+    ${RW ? `<p class="kick">${T.rwKick}</p>` : ""}
+    <div class="under" style="margin:0 0 6px"><span class="cnt">${tx("von", { n: S[IX] + 1, m: order.length })}</span>${mine.length ? `<button class="btn ghost" id="undo">${T.undo}</button>` : ""}</div>
+    <div class="bar"><i style="width:${Math.round(S[IX] / order.length * 100)}%"></i></div>
     <div class="deck" id="deck">${cardHtml(nxt, "next")}${cardHtml(cur, "top")}</div>
     <div class="swipebtns"><button class="btn" id="no">${T.nein}</button><button class="btn primary" id="yes">${T.ja}</button></div>
-    <div class="under">${S.swipes.length >= MIN_SWIPES ? `<button class="btn ghost" id="enough">${T.genug}</button>` : "<span></span>"}</div>`;
+    <div class="under">${!RW && mine.length >= MIN_SWIPES ? `<button class="btn ghost" id="enough">${T.genug}</button>` : "<span></span>"}</div>`;
 
   const card = $("card"), yes = card.querySelector(".stamp.yes"), no = card.querySelector(".stamp.no");
   let x0 = null, dx = 0, busy = false;
@@ -309,7 +356,7 @@ async function swipe() {
     if (busy) return; busy = true;
     card.style.transition = "transform .28s ease, opacity .28s";
     card.style.transform = `translateX(${dir * 130}%) rotate(${dir * 18}deg)`; card.style.opacity = "0";
-    setTimeout(() => decide(cur, dir > 0 ? "ja" : "nein"), 220);
+    setTimeout(() => decide(cur, dir > 0 ? "ja" : "nein", RW), 220);
   };
   card.addEventListener("pointerdown", e => { x0 = e.clientX; dx = 0; card.setPointerCapture(e.pointerId); card.style.transition = "none"; });
   card.addEventListener("pointermove", e => {
@@ -324,25 +371,30 @@ async function swipe() {
   };
   card.addEventListener("pointerup", end); card.addEventListener("pointercancel", end);
   $("yes").onclick = () => fly(1); $("no").onclick = () => fly(-1);
-  if ($("enough")) $("enough").onclick = () => go("ende");
-  if ($("undo")) $("undo").onclick = () => { const last = S.swipes.pop(); if (last) S.idx = Math.max(0, S.idx - 1); save(); render(); };
-  document.onkeydown = e => { if (S.step !== "swipe" || document.querySelector(".sheet")) return; if (e.key === "ArrowRight") fly(1); if (e.key === "ArrowLeft") fly(-1); };
+  if ($("enough")) $("enough").onclick = () => go(after);
+  if ($("undo")) $("undo").onclick = () => {
+    const last = S.swipes[S.swipes.length - 1];
+    if (last && (last.art === "rework") === RW) { S.swipes.pop(); S[IX] = Math.max(0, S[IX] - 1); }
+    save(); render();
+  };
+  document.onkeydown = e => { if (S.step !== step || document.querySelector(".sheet")) return; if (e.key === "ArrowRight") fly(1); if (e.key === "ArrowLeft") fly(-1); };
 }
-function decide(it, wahl) {
+function decide(it, wahl, RW) {
   const rec = { id: it.id, nr: it.nr, wahl };
-  if (wahl === "nein") { S.swipes.push(rec); S.idx++; save(); render(); return; }
-  popup(it, rec);
+  if (RW) rec.art = "rework";
+  if (wahl === "nein") { S.swipes.push(rec); S[RW ? "ridx" : "idx"]++; save(); render(); return; }
+  popup(it, rec, RW);
 }
-function popup(it, rec) {
+function popup(it, rec, RW) {
   const el = document.createElement("div");
   el.className = "sheet"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("data-notr", "");
   el.innerHTML = `<div>
     <p class="kick">${esc(label(it))}</p>
-    <h2>${T.popH}</h2>
-    <p class="q">${T.popPreis}</p><p class="muted">${T.popPreisNote}</p>
+    <h2>${RW ? T.rwPopH : T.popH}</h2>
+    <p class="q">${RW ? T.rwPopPreis : T.popPreis}</p>${RW ? "" : `<p class="muted">${T.popPreisNote}</p>`}
     <div class="chips" id="pp">${PREISE.map(p => `<button type="button" class="chip" data-v="${p}" aria-pressed="false">${p}</button>`).join("")}</div>
-    <p class="q">${T.popAnlass}</p>
-    <div class="chips" id="pa">${Object.entries(T.anlass).map(([k, v]) => `<button type="button" class="chip" data-v="${k}" aria-pressed="false">${esc(v)}</button>`).join("")}</div>
+    <p class="q">${RW ? T.rwPopTragen : T.popAnlass}</p>
+    <div class="chips" id="pa">${Object.entries(RW ? T.rwTragen : T.anlass).map(([k, v]) => `<button type="button" class="chip" data-v="${k}" aria-pressed="false">${esc(v)}</button>`).join("")}</div>
     <div class="row"><button class="btn primary" id="pok">${T.popOk}</button><button class="btn ghost" id="pskip">${T.skip}</button></div>
   </div>`;
   document.body.appendChild(el);
@@ -351,16 +403,55 @@ function popup(it, rec) {
   const val = id => { const b = el.querySelector(`#${id} .chip[aria-pressed="true"]`); return b ? b.dataset.v : null; };
   const done = withVals => {
     if (withVals) { rec.preis = val("pp"); rec.anlass = val("pa"); }
-    el.remove(); S.swipes.push(rec); S.idx++; save(); render();
+    el.remove(); S.swipes.push(rec); S[RW ? "ridx" : "idx"]++; save(); render();
   };
   el.querySelector("#pok").onclick = () => done(true);
   el.querySelector("#pskip").onclick = () => done(false);
   el.querySelector(".chip").focus();
 }
 
+/* ---------- Rework ---------- */
+async function reworkIntro() {
+  if (loadState !== "ok" && loadState !== "error") { app.innerHTML = `<p class="muted">${T.laden}</p>`; await loadItems(); if (S.step !== "reworkIntro") return; }
+  const hat = (S.rorder || []).length > 0;
+  app.innerHTML = `
+    <p class="kick">${T.rwKick}</p>
+    <h1>${T.rwH}</h1>
+    <p class="lead">${T.rwP}</p>
+    ${hat ? `<p class="muted">${T.rwSwipe}</p>` : ""}
+    <div class="row"><button class="btn" id="back">${T.zurueck}</button><button class="btn primary btn-l" id="go">${hat ? T.rwGo : T.rwFragenGo}</button></div>`;
+  $("go").onclick = () => go(hat ? "rswipe" : "reworkFragen");
+  $("back").onclick = () => {
+    const n = (S.order || []).length, last = S.swipes[S.swipes.length - 1];
+    if (n && S.idx >= n && last && last.art !== "rework") { S.swipes.pop(); S.idx = n - 1; }
+    go(n ? "swipe" : "swipeIntro");
+  };
+}
+function reworkFragen() {
+  const blocks = T.rwQ.map(([id, typ, q]) => {
+    const o = RW_OPT[id], a = S.antworten[id];
+    const sel = typ === "multi" ? (a && a.wahl) || [] : [a];
+    return `<h2 style="margin-top:20px">${esc(q)}</h2>${typ === "multi" ? `<p class="muted">${T.rwMehrfach}</p>` : ""}
+      <div class="chips" data-q="${id}" data-typ="${typ}">${o.de.map((x, i) => `<button type="button" class="chip" data-o="${esc(x)}" aria-pressed="${sel.includes(x)}">${esc(LANG === "en" ? o.en[i] : x)}</button>`).join("")}</div>`;
+  }).join("");
+  app.innerHTML = `<p class="kick">${T.rwKick}</p><h1 style="font-size:clamp(28px,7vw,40px)">${T.rwFragenH}</h1>${blocks}
+    <div class="row"><button class="btn" id="back">${T.zurueck}</button><button class="btn primary" id="next">${T.weiter}</button></div>`;
+  app.querySelectorAll("[data-q]").forEach(g => g.querySelectorAll(".chip").forEach(b => b.onclick = () => {
+    if (g.dataset.typ === "single") g.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === b && b.getAttribute("aria-pressed") !== "true"));
+    else b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true");
+  }));
+  const store = () => app.querySelectorAll("[data-q]").forEach(g => {
+    const on = [...g.querySelectorAll('.chip[aria-pressed="true"]')].map(b => b.dataset.o);
+    if (g.dataset.typ === "multi") { if (on.length) S.antworten[g.dataset.q] = { wahl: on, anders: "" }; else delete S.antworten[g.dataset.q]; }
+    else { if (on[0]) S.antworten[g.dataset.q] = on[0]; else delete S.antworten[g.dataset.q]; }
+  });
+  $("next").onclick = () => { store(); go("ende"); };
+  $("back").onclick = () => { store(); go("reworkIntro"); };
+}
+
 /* ---------- Ende ---------- */
 async function ende() {
-  const likes = S.swipes.filter(s => s.wahl === "ja");
+  const likes = S.swipes.filter(s => s.wahl === "ja" && s.art !== "rework");
   if (KAUF_AKTIV && likes.length) { app.innerHTML = `<p class="muted">${T.laden}</p>`; await loadItems(); }
   if (S.step !== "ende") return;
   const kaufHtml = !KAUF_AKTIV ? "" : `
@@ -387,7 +478,7 @@ async function ende() {
     S.kauf = [...app.querySelectorAll("[data-k]:checked")].map(i => i.dataset.k); save();
   };
   app.oninput = keep; app.onchange = keep;
-  $("back").onclick = () => { keep(); if ((S.order || []).length && S.idx > 0) S.idx = Math.min(S.idx, S.order.length); go(S.order && S.idx < S.order.length ? "swipe" : "swipeIntro"); };
+  $("back").onclick = () => { keep(); go("reworkFragen"); };
   $("send").onclick = send;
 }
 async function send() {
