@@ -521,11 +521,13 @@ function renderAll() {
   $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "") + (missingCuts().length ? ` · <button class="btn" type="button" id="cutBtn">${missingCuts().length} Teile in Looks freistellen</button>` : "");
 }
 function setTab(t) {
-  ["items", "looks", "owners", "anm", "finanzen", "insights", "fotoecke"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  ["items", "looks", "owners", "anm", "finanzen", "insights", "fotoecke", "umfrage"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
   $("viewFinanzen").hidden = t !== "finanzen";
   if (t === "finanzen" && window.renderFinanzen) renderFinanzen(true);
   $("viewInsights").hidden = t !== "insights";
   $("viewFotoecke").hidden = t !== "fotoecke";
+  $("viewUmfrage").hidden = t !== "umfrage";
+  if (t === "umfrage" && window.renderUmfrage) renderUmfrage(true);
   if (t === "fotoecke" && window.renderFotoecke) renderFotoecke(true);
   if (t === "insights" && window.renderInsights) renderInsights();
   $("viewAnm").hidden = t !== "anm";
@@ -1683,6 +1685,7 @@ document.addEventListener("click", e => {
     case "tab-insights": return setTab("insights");
     case "tab-finanzen": return setTab("finanzen");
     case "tab-fotoecke": return setTab("fotoecke");
+    case "tab-umfrage": return setTab("umfrage");
     case "addBtn": return showAdd();
     case "addLookBtn": return showAddLook();
     case "addOwnerBtn": return ownerForm();
