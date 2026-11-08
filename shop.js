@@ -448,11 +448,9 @@ function initJoin() {
   for (let i = 0; i < 5; i++) { const d = new Date(t.getFullYear(), t.getMonth() + i, 1); opts += `<option value="${iso(d)}" ${i === 1 ? "selected" : ""}>${MONTHS[d.getMonth()]} ${d.getFullYear()}</option>`; }
   $("j-monat").innerHTML = opts + `<option value="">Egal, sobald es passt</option>`;
   $("j-anzahl").innerHTML = Array.from({ length: 10 }, (_, i) => `<option ${i === 9 ? "selected" : ""}>${i + 1}</option>`).join("");
-  $("j-kat").innerHTML = CATS.map(c => `<button class="chip" type="button" aria-pressed="false" data-jkat="${c}">${c}</button>`).join("");
+  $("j-kat").innerHTML = CATS.filter(c => !["Schuhe", "Taschen", "Accessoires"].includes(c)).map(c => `<button class="chip" type="button" aria-pressed="false" data-jkat="${c}">${c}</button>`).join("");
   $("j-oben").innerHTML = SIZES.map(s => `<button class="chip" type="button" aria-pressed="false" data-jsize="oben" data-v="${s}">${s}</button>`).join("");
   $("j-unten").innerHTML = SIZES.map(s => `<button class="chip" type="button" aria-pressed="false" data-jsize="unten" data-v="${s}">${s}</button>`).join("");
-  let sh = `<option value="">Keine Schuhe</option>`; for (let s = 35; s <= 44; s++) sh += `<option>${s}</option>`;
-  $("j-schuhe").innerHTML = sh;
   $("j-stile").innerHTML = STILE.map(s => `
     <button class="stile" type="button" aria-pressed="false" data-stil="${s.key}">
       <span class="sph"><img src="${esc(s.img)}" alt="" onerror="this.remove()"><span class="sname">${s.key}</span></span>
@@ -511,7 +509,7 @@ async function submitJoin() {
       vorname: v("j-vorname"), nachname: v("j-nachname"), email, telefon: v("j-telefon"), instagram: v("j-instagram"),
       groesse_oben: picked('[data-jsize="oben"]').map(b => b.dataset.v).join("/") || null,
       groesse_unten: picked('[data-jsize="unten"]').map(b => b.dataset.v).join("/") || null,
-      schuhgroesse: v("j-schuhe"), kategorien: picked("[data-jkat]").map(b => b.dataset.jkat), stile,
+      schuhgroesse: null, kategorien: picked("[data-jkat]").map(b => b.dataset.jkat), stile,
       anzahl_teile: Number($("j-anzahl").value), wunsch_monat: $("j-monat").value || null,
       vermieten: $("j-vermieten").checked, vermieten_text: $("j-vermieten").checked ? v("j-vtext") : null, vermieten_fotos: fotos,
       nachricht: v("j-nachricht"), zustimmung: true

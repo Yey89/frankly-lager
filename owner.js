@@ -11,18 +11,20 @@ const $ = id => document.getElementById(id);
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const STUFE = {
-  Stange: "An der Stange",
+  Stange: "An der Hauptstange",
   Reduziert: "An der Reduziert-Stange",
-  Upcycling: "Von Among Friends upgecycelt, an der Upcycling-Stange. Wird es verkauft, bekommst du 20 %",
+  Upcycling: "Von Among Friends upgecycelt, an der Upcycling-Stange",
   Lager: "Im Lager · online auf Anfrage",
   Online: "Online-Stange · bei dir zu Hause"
 };
+/* Hauptstange: Nicht verkauft → abholen (letzter Samstag 17–18 Uhr) oder Among Friends überlassen.
+   Reduziert-Stange: Nicht verkauft → gehört Among Friends, keine Wahl.
+   Lager: nur noch für alte Teile. */
 const WAHL = {
-  Stange: ["Preis senken", "Upcycling", "Zurücknehmen"],
-  Reduziert: ["Online", "Upcycling", "Zurücknehmen", "Spenden"],
+  Stange: ["Zurücknehmen", "Überlassen"],
   Lager: ["Online", "Upcycling", "Zurücknehmen", "Spenden"]
 };
-const WAHL_TXT = { "Preis senken": "Preis senken", Upcycling: "Among Friends upcycelt es (du bekommst 20 %)", Zurücknehmen: "Zurücknehmen", Lager: "Ins Lager", Online: "Abholen und online weiterverkaufen", Spenden: "Spenden" };
+const WAHL_TXT = { Zurücknehmen: "Ich hole es am letzten Samstag ab (17–18 Uhr)", Überlassen: "Ich überlasse es Among Friends (später 30 %, wenn es upgecycelt verkauft wird)", Upcycling: "Among Friends upcycelt es (du bekommst 30 %)", Online: "Abholen und online weiterverkaufen", Spenden: "Spenden" };
 
 let sb = null, TOKEN = null, DATA = null, URLS = {}, open = {};
 
@@ -46,6 +48,8 @@ function saturdays(n) {
   for (let i = 0; i < n; i++) { out.push(new Date(d)); d.setDate(d.getDate() + 7); }
   return out;
 }
+/* Abholung: letzter Samstag der Runde, oder der nächste Samstag, wenn die Runde schon vorbei ist */
+function pickupDay(it) { const p = phaseState(it); return p && p.end >= heute() ? p.end : saturdays(1)[0]; }
 function satOptions() { return saturdays(8).map(d => `<option value="${iso(d)}">${fmt(d)}${d.getFullYear() !== heute().getFullYear() ? d.getFullYear() : ""}</option>`).join(""); }
 function payoutDate(s) { const d = parseD(s) || heute(); const ls = lastSat(d.getFullYear(), d.getMonth()); return d <= ls ? ls : lastSat(d.getFullYear(), d.getMonth() + 1); }
 function niceErr(e) {
@@ -63,7 +67,9 @@ function phaseState(it) {
   if (t <= end) return { state: "running", start, end };
   return { state: "due", start, end };
 }
-function isDue(it) { const p = phaseState(it); return it.status === "Verfügbar" && !it.entscheid && p && p.state === "due"; }
+function isDue(it) { const p = phaseState(it); return it.status === "Verfügbar" && !it.entscheid && !!WAHL[it.stufe] && p && p.state === "due"; }
+/* An der Hauptstange darf die Owner schon während der Runde sagen, was passiert, falls es nicht verkauft wird. */
+function canDecide(it) { const p = phaseState(it); return it.status === "Verfügbar" && !it.entscheid && p && (isDue(it) || (it.stufe === "Stange" && p.state === "running")); }
 function provOf(it) { return it.verkauf_provision != null ? Number(it.verkauf_provision) : Number(DATA.owner.provision); }
 function posts() {
   const out = [];
@@ -76,7 +82,7 @@ function posts() {
 }
 function stateLine(it) {
   const p = phaseState(it);
-  if (it.entscheid === "Upcycling" && it.status === "Entwurf") return t("<b>Bei Among Friends zum Upcyceln.</b> Daraus entsteht etwas Neues. Wird es verkauft, bekommst du 20 %.") + (it.entscheid_notiz ? t(" Deine Idee: «{i}»", { i: esc(it.entscheid_notiz) }) : "");
+  if (it.entscheid === "Upcycling" && it.status === "Entwurf") return t(provOf(it) >= 90 ? "<b>Bei Among Friends zum Upcyceln.</b> Daraus entsteht etwas Neues. Wird es verkauft, bekommst du 10 %." : "<b>Bei Among Friends zum Upcyceln.</b> Daraus entsteht etwas Neues. Wird es verkauft, bekommst du 30 %.") + (it.entscheid_notiz ? t(" Deine Idee: «{i}»", { i: esc(it.entscheid_notiz) }) : "");
   if (it.status === "Entwurf") return `Wird gerade erfasst`;
   if (it.status === "Verkauft") {
     const b = it.verkauf_preis != null ? it.verkauf_preis : it.preis, a = round2(Number(b) * (100 - provOf(it)) / 100);
@@ -91,13 +97,16 @@ function stateLine(it) {
   if (it.status === "Zurückgegeben") return `Zurück bei dir`;
   if (it.status === "Gespendet") return `Gespendet. Danke!`;
   if (it.entscheid === "Zurücknehmen" && it.entscheid_notiz === "Online weiterverkaufen") return t("<b>Abholung</b> am {d}, danach auf der Online-Stange", { d: esc(fmt(it.entscheid_datum)) });
-  if (it.entscheid === "Zurücknehmen") return t("<b>Abholung</b> am {d} im Laden", { d: esc(fmt(it.entscheid_datum)) });
+  if (it.entscheid === "Überlassen") return t("<b>Du überlässt es Among Friends,</b> falls es bis {d} nicht verkauft wird. Wird es später upgecycelt verkauft, bekommst du 30 %.", { d: esc(fmt(p ? p.end : heute())) });
+  if (it.entscheid === "Zurücknehmen") return t("<b>Abholung</b> am {d} im Laden, 17–18 Uhr", { d: esc(fmt(it.entscheid_datum)) });
   if (it.stufe === "Online") return `${t("<b>Online-Stange:</b> Das Teil ist bei dir. Bitte bewahre es separat auf. Wird es gekauft, melden wir uns, und du verschickst es innert 3 Tagen.")}<br><button class="btn" type="button" data-online-ende="${esc(it.id)}">Nicht mehr verfügbar</button>`;
   if (it.entscheid === "Spenden") return `<b>Wird gespendet</b>`;
   const s = STUFE[it.stufe] || "Im Laden";
   if (!p) return s;
   if (p.state === "upcoming") return t("{s} ab {d}", { s: t(s), d: esc(fmt(p.start)) });
+  if (p.state === "running" && it.stufe === "Reduziert") return t("{s} bis {d} · nicht verkauft geht es danach an Among Friends.", { s: t(s), d: esc(fmt(p.end)) });
   if (p.state === "running") return t("{s} bis {d}", { s: t(s), d: esc(fmt(p.end)) });
+  if (it.stufe === "Reduziert") return `Nicht verkauft: Das Teil gehört jetzt Among Friends. Wird es upgecycelt verkauft, bekommst du 10 %.`;
   return `<span class="warn">Runde vorbei: Bitte entscheide, wie es weitergeht.</span>`;
 }
 function thumb(it) { const u = URLS[it.foto_pfad]; return u ? `<img src="${esc(u)}" alt="" loading="lazy">` : `<span class="nofoto">kein Foto</span>`; }
@@ -112,7 +121,7 @@ function row(it) {
         ${it.status !== "Verkauft" && it.preis != null ? `<span class="oprice">${esc(chf(it.preis))}</span>` : ""}
         <span class="ostate">${stateLine(it)}</span>
       </div>
-      ${due ? decideBox(it) : ""}
+      ${canDecide(it) ? decideBox(it) : ""}
     </article>`;
 }
 
@@ -122,7 +131,7 @@ function decideBox(it) {
   return `
     <div class="decide">
       <fieldset class="choices">
-        <legend>Wie geht es weiter?</legend>
+        <legend>${isDue(it) ? "Wie geht es weiter?" : "Falls es nicht verkauft wird:"}</legend>
         ${opts.map(o => `<label class="choice"><input type="radio" name="w-${esc(it.id)}" value="${esc(o)}" data-wahl="${esc(it.id)}" ${o === sel ? "checked" : ""}><span>${esc(WAHL_TXT[o])}</span></label>`).join("")}
       </fieldset>
       ${sel ? decideForm(it, sel) : ""}
@@ -135,11 +144,12 @@ function decideForm(it, w) {
   if (w === "Preis senken") body = `
     <p class="dnote">${t("Dein Teil hängt in {r} an der Reduziert-Stange. Bisher {p}.", { r: esc(nextRound(it)), p: esc(chf(it.preis)) })}</p>
     <label>Neuer Preis CHF<input id="d-preis-${id}" inputmode="decimal" autocomplete="off" placeholder="${t("z.B. {p}", { p: esc(it.preis != null ? Math.max(0, Math.round(Number(it.preis) * 0.7)) : 20) })}"></label>`;
-  if (w === "Upcycling") body = `
-    <p class="dnote">Du gibst dein Teil an Among Friends. Yesim macht daraus etwas Neues: ein ganz neues Stück, oder sie verändert es, z.B. kürzen oder einen anderen Schnitt. Das neue Teil hängt dann an der Upcycling-Stange. Wird es verkauft, bekommst du 20 % vom Preis, 80 % gehen an Among Friends für Arbeit und Material.</p>
+  if (w === "Upcycling" || w === "Überlassen") body = `
+    <p class="dnote">Du überlässt dein Teil Among Friends. Yesim macht daraus nach und nach etwas Neues: ein ganz neues Stück, oder sie verändert es, z.B. kürzen oder einen anderen Schnitt. Wird es verkauft, bekommst du 30 % vom Preis, 70 % gehen an Among Friends für Arbeit und Material. Wir melden uns, wenn es fertig ist und wenn es verkauft wird.</p>
     <label>Hast du eine Idee? (freiwillig)<textarea id="d-idee-${id}" rows="2" maxlength="300" placeholder="z.B. als Crop-Top, Ärmel ab, als Tasche …"></textarea></label>`;
-  if (w === "Zurücknehmen") body = `
-    <p class="dnote">Du holst dein Teil an einem Samstag im Laden ab.</p>
+  if (w === "Zurücknehmen") body = it.stufe === "Stange"
+    ? `<p class="dnote">${t("Du holst dein Teil am {d} zwischen 17 und 18 Uhr im Laden ab. Wird es vorher verkauft, bekommst du deinen Anteil wie immer.", { d: esc(fmt(pickupDay(it))) })}</p>`
+    : `<p class="dnote">Du holst dein Teil an einem Samstag zwischen 17 und 18 Uhr im Laden ab.</p>
     <label>Abholung am<select id="d-tag-${id}">${satOptions()}</select></label>`;
   if (w === "Lager") body = `<p class="dnote">${t("Dein Teil kommt für {r} ins Lager. Im Online-Shop bleibt es sichtbar mit «Auf Anfrage». Wer es anprobieren möchte, meldet sich bei uns.", { r: esc(nextRound(it)) })}</p>`;
   if (w === "Online") body = `
@@ -161,7 +171,8 @@ async function submitDecision(id, btn) {
   if (w === "Upcycling") {
     args.p_notiz = (($("d-idee-" + id) || {}).value || "").trim() || null;
   }
-  if (w === "Zurücknehmen") args.p_datum = $("d-tag-" + id).value;
+  if (w === "Zurücknehmen") args.p_datum = $("d-tag-" + id) ? $("d-tag-" + id).value : iso(pickupDay(it));
+  if (w === "Überlassen") args.p_notiz = (($("d-idee-" + id) || {}).value || "").trim() || null;
   if (w === "Online") {
     if (!$("d-ok-" + id).checked) return toast("Bitte bestätige, dass du das Teil separat aufbewahrst und verschickst.");
     args.p_datum = $("d-tag-" + id).value;
@@ -187,7 +198,7 @@ function render() {
     <div class="ohead">
       <span class="sub">${esc(o.id)}</span>
       <h1 class="claim">${t("Hallo {name}", { name: esc(o.profilname) })}</h1>
-      <p class="lead">${t("Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf bekommst du {s} %, von jeder Miete 70 %, von deinen upgecycelten Teilen 20 %.", { s: esc(share) })}</p>
+      <p class="lead">${t("Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf an der Hauptstange bekommst du {s} %, an der Reduziert-Stange 90 %, von jeder Miete 60 %.", { s: esc(share) })}</p>
     </div>
     <div class="okpis">
       <div class="okpi"><span class="klabel">Verdient bisher</span><span class="kval">${esc(chf(earned))}</span></div>
@@ -201,12 +212,12 @@ function render() {
     <div class="howto">
       <span class="klabel">So läuft es</span>
       <ol>
-        <li><b>Monat 1:</b> Dein Teil hängt zu deinem Preis an der Stange. Eine Runde geht vom ersten bis zum letzten Samstag im Monat.</li>
-        <li><b>Monat 2:</b> Ist es nicht verkauft, wählst du: Preis senken (Reduziert-Stange), Among Friends upcycelt es, oder du nimmst es zurück.</li>
-        <li><b>Nach Monat 2:</b> Du holst es ab und verkaufst es auf der <b>Online-Stange</b> weiter (du verschickst es, wenn jemand es kauft), oder Among Friends upcycelt es. Zurücknehmen oder spenden geht auch.</li>
-        <li><b>Upcycling:</b> Among Friends macht aus deinem Teil etwas Neues. Wird es verkauft, bekommst du 20 %.</li>
+        <li><b>Ein Monat:</b> Deine Teile hängen vom ersten bis zum letzten Samstag im Monat im Laden. Hauptstange: dein Preis, du bekommst 80 %. Reduziert-Stange: CHF 10 bis 20, du bekommst 90 %.</li>
+        <li><b>Hauptstange, nicht verkauft:</b> Du holst es am letzten Samstag zwischen 17 und 18 Uhr ab, oder du überlässt es Among Friends.</li>
+        <li><b>Reduziert-Stange, nicht verkauft:</b> Das Teil gehört danach Among Friends.</li>
+        <li><b>Upcycling:</b> Among Friends macht später aus Teilen etwas Neues. Wird es verkauft, bekommst du 30 % (überlassene Teile) oder 10 % (Teile der Reduziert-Stange).</li>
       </ol>
-      <p class="hint"><b>Testlauf:</b> Die ersten drei Monate sind ein Probelauf. Reduziert-Stange, Upcycling und Online-Stange können sich danach noch ändern. Wir informieren dich rechtzeitig.</p>
+      <p class="hint"><b>Testlauf:</b> Ob eine Runde länger dauern soll, testen wir noch. Wir informieren dich rechtzeitig.</p>
     </div>`;
 }
 function noLink(msg) {

@@ -11,9 +11,14 @@ const SELF = "OWN-001"; // Among Friends / eigene Teile: keine Provision, keine 
 const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet", "Zurückgegeben", "Gespendet"];
 const CLOSED = ["Verkauft", "Zurückgegeben", "Gespendet"];
 const STUFEN = ["Stange", "Reduziert", "Upcycling", "Lager", "Online"];
-const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Upcycling von Among Friends · Owner 20 %", Lager: "Lager (alt), auf Anfrage", Online: "Online-Stange · bei der Owner, Versand" };
+const STUFE_TXT = { Stange: "Hauptstange · Owner 80 %", Reduziert: "Reduziert-Stange · Owner 90 %", Upcycling: "Upcycling von Among Friends · Owner 30 % / 10 %", Lager: "Lager (alt), auf Anfrage", Online: "Online-Stange (alt) · bei der Owner" };
 const ONLINE_NOTIZ = "Online weiterverkaufen";
-const UPC_PROV = 80; // Upcycling durch Among Friends: 80 % Among Friends, 20 % ursprüngliche Owner
+const UPC_PROV = 70;     // Upcycling von einem guten Teil (überlassen): 70 % Among Friends, 30 % Owner
+const UPC_PROV_RED = 90; // Upcycling von einem Teil der Reduziert-Stange: 90 % Among Friends, 10 % Owner
+const RED_PROV = 10;     // Verkauf an der Reduziert-Stange: 10 % Among Friends, 90 % Owner
+const OWNER_PROV = 20;   // Hauptstange: 20 % Among Friends, 80 % Owner
+const CLUB_PLUS = 10;    // Nichtmitglieder zahlen an der Hauptstange CHF 10 mehr (geht an Among Friends)
+const ABHOL_ZEIT = "17–18 Uhr";
 const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
 const STYLES = ["FIERCE", "EDGY", "DREAMY", "AGILE"];
 const BASE_CATS = ["Oberteile", "Tuniken", "Hosen", "Röcke", "Kleider", "Jacken", "Kimonos", "Schuhe", "Taschen", "Accessoires"];
@@ -56,7 +61,7 @@ function uuid() {
 function imgUrl(path) { return path ? URLS["thumbs/" + path] || URLS[path] || "" : ""; }
 function bigUrl(path) { return path ? URLS[path] || URLS["thumbs/" + path] || "" : ""; }
 function imgTag(path, alt, big) { const u = big ? bigUrl(path) : imgUrl(path); return u ? `<img src="${esc(u)}" alt="${esc(alt)}" loading="lazy" decoding="async">` : `<span class="nofoto">Foto fehlt</span>`; }
-const RENT_PROV = 30; // Anteil Among Friends bei Vermietungen (Owner erhält 70 %)
+const RENT_PROV = 40; // Anteil Among Friends bei Vermietungen (Owner erhält 60 %)
 const SZ = window.FRANKLY_SIZES;
 function sizePreview(txt, kat) {
   if (!SZ) return "";
@@ -216,11 +221,18 @@ function phaseOptions(current) {
 /* ---------- Owner ---------- */
 function ownerOf(id) { return OWNERS.find(o => o.id === id); }
 function ownerName(id) { const o = ownerOf(id); return o ? o.profilname : (id || "–"); }
-function ownerProv(id) { const o = ownerOf(id); return o ? Number(o.provision_prozent) : 10; }
+function ownerProv(id) { const o = ownerOf(id); return o ? Number(o.provision_prozent) : OWNER_PROV; }
+/* Anteil Among Friends beim Verkauf, je nach Stange */
+function saleProv(it) {
+  if (it.owner_id === SELF) return 100;
+  if (it.stufe === "Reduziert") return RED_PROV;
+  if (it.stufe === "Upcycling") return it.verkauf_provision != null ? Number(it.verkauf_provision) : UPC_PROV;
+  return ownerProv(it.owner_id);
+}
 function ownerOptions(sel) { return OWNERS.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? "selected" : ""}>${esc(o.profilname)} · ${esc(o.id)}</option>`).join(""); }
 function itemOwner(itemId) { const it = ITEMS.find(x => x.id === itemId); return it ? it.owner_id : null; }
 /* ---------- Geld: Verkäufe & Mieten ----------
-   Provision = Anteil Among Friends (z.B. 10 %). Owner erhält den Rest (z.B. 90 %).
+   Provision = Anteil Among Friends (Hauptstange 20 %, Reduziert 10 %). Owner erhält den Rest (80 % / 90 %).
    Bei eigenen Teilen (OWN-001) geht alles an Among Friends. */
 function saleAmount(i) { return i.verkauf_preis != null ? Number(i.verkauf_preis) : (i.preis != null ? Number(i.preis) : null); }
 function saleDate(i) { return i.verkauf_datum || (i.updated_at ? String(i.updated_at).slice(0, 10) : null); }
@@ -574,16 +586,18 @@ function phaseBlock(it) {
   if (p.state === "upcoming") line = `${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} startet am ${fmt(p.start)}.`;
   if (p.state === "running") line = `${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} läuft bis ${fmt(p.end)} · noch ${p.days} ${p.days === 1 ? "Tag" : "Tage"}.`;
   if (p.state === "done") line = `${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} (${range}) abgeschlossen.`;
-  if (p.state === "due") line = `<b class="warn">Entscheid fällig.</b> ${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} ist am ${fmt(p.end)} zu Ende gegangen. Die Owner kann auch selbst online entscheiden.`;
+  if (p.state === "due") line = `<b class="warn">Entscheid fällig.</b> ${esc(stTxt)} · Runde ${monthLabel(it.phase_monat)} ist am ${fmt(p.end)} zu Ende gegangen. ${stufe === "Reduziert" ? "Nicht verkauft: Das Teil gehört jetzt Among Friends (Owner 10 %, wenn es upgecycelt verkauft wird)." : "Die Owner kann auch selbst online entscheiden."}`;
   if (p.state === "decided") {
     const d = it.entscheid_datum ? ` am ${fmt(it.entscheid_datum)}` : "";
     const von = it.entscheid_von === "Owner" ? ` <span class="hint">(online von der Owner)</span>` : "";
-    line = `Entscheid: <b>${esc(it.entscheid)}</b>${d}.${it.entscheid_notiz ? " " + esc(it.entscheid_notiz) + "." : ""}${von}`;
-    const doneTxt = { "Zurücknehmen": "Abgeholt", "Upcycling": "Upcycling fertig", "Spenden": "Gespendet" }[it.entscheid] || "Erledigt";
+    line = it.entscheid === "Überlassen" ? `Entscheid: <b>Owner überlässt es Among Friends</b>, falls es bis ${fmt(p.end)} nicht verkauft wird. Danach auf den Upcycling-Stapel (Owner 30 %).` : `Entscheid: <b>${esc(it.entscheid)}</b>${d}.${it.entscheid_notiz ? " " + esc(it.entscheid_notiz) + "." : ""}`;
+    line += von;
+    const doneTxt = { "Zurücknehmen": "Abgeholt", "Upcycling": "Upcycling fertig", "Überlassen": "Auf den Upcycling-Stapel", "Spenden": "Gespendet" }[it.entscheid] || "Erledigt";
     acts = `<button class="btn primary" type="button" data-act="done">${doneTxt}</button><button class="btn" type="button" data-act="undecide">Entscheid ändern</button>`;
   }
   if (p.state === "due" || p.state === "running") {
-    if (stufe === "Stange") acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Among Friends upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
+    if (stufe === "Stange") acts = `<button class="btn" type="button" data-act="takeback">Owner holt ab …</button><button class="btn" type="button" data-act="upcycle">Owner überlässt es (Upcycling) …</button>`;
+    else if (stufe === "Reduziert") acts = `<button class="btn" type="button" data-act="upcycle">Geht an Among Friends …</button><button class="btn" type="button" data-act="takeback">Owner holt ab …</button>`;
     else acts = `<button class="btn" type="button" data-act="toonline">Abholen + online …</button><button class="btn" type="button" data-act="upcycle">Among Friends upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
   }
     return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Runde</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
@@ -803,10 +817,10 @@ async function saveEdit(id, btn) {
   if (patch.status === "Verkauft" && old.status !== "Verkauft") {
     patch.verkauf_preis = old.verkauf_preis != null ? old.verkauf_preis : patch.preis;
     patch.verkauf_datum = old.verkauf_datum || iso(today());
-    patch.verkauf_provision = ownerProv(patch.owner_id);
+    patch.verkauf_provision = saleProv(Object.assign({}, old, patch));
   }
   if (patch.status !== "Verkauft" && old.status === "Verkauft" && !old.ausbezahlt_am) {
-    Object.assign(patch, { verkauf_preis: null, verkauf_datum: null, verkauf_provision: null });
+    Object.assign(patch, { verkauf_preis: null, verkauf_datum: null, verkauf_provision: (patch.stufe || old.stufe) === "Upcycling" ? old.verkauf_provision : null });
   }
   busy(btn, true);
   const ok = await patchItem(id, patch, "Gespeichert");
@@ -855,20 +869,25 @@ function actForm(html) { const a = $("act"); if (a) { a.innerHTML = `<form class
 function satOptions() { return nextSaturdays(8).map(d => `<option value="${iso(d)}">${fmt(d)}</option>`).join(""); }
 
 function openAction(kind, it) {
-  const self = it.owner_id === SELF, prov = !self && it.stufe === "Upcycling" ? UPC_PROV : ownerProv(it.owner_id);
+  const self = it.owner_id === SELF, prov = saleProv(it), club = !self && (it.stufe || "Stange") === "Stange";
   if (kind === "sell") {
     actForm(`<div class="sec" style="margin:0">Verkauf erfassen</div>
-      <div class="two"><label>Verkaufspreis CHF<input id="a-preis" inputmode="decimal" value="${esc(it.preis ?? "")}"></label>
+      <div class="two"><label>Verkaufspreis CHF<input id="a-preis" inputmode="decimal" value="${esc(it.preis != null ? Number(it.preis) + (club ? CLUB_PLUS : 0) : "")}"></label>
       <label>Datum<input id="a-datum" type="date" value="${iso(today())}"></label></div>
+      ${club ? `<label class="check"><input id="a-club" type="checkbox"> Käuferin ist im Among Friends Club (zahlt CHF ${CLUB_PLUS} weniger)</label>` : ""}
       ${self ? "" : `<p class="hint" id="a-info"></p>`}
       <div class="rowsmall"><button class="btn primary" type="submit">Als verkauft speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
-    const upd = () => { const i = $("a-info"); if (!i) return; const p = parsePrice($("a-preis").value); i.textContent = p == null ? "" : `An ${ownerName(it.owner_id)}: ${chf(share(p, prov))} (${100 - prov} %) · Among Friends: ${chf(round2(p - share(p, prov)))} (${prov} %)`; };
+    /* Hauptstange: Owner bekommt 80 % vom Mitgliederpreis. Die CHF 10 von Nichtmitgliedern gehen ganz an Among Friends. */
+    const plus = () => club && !($("a-club") && $("a-club").checked) ? CLUB_PLUS : 0;
+    const provFor = p => { const extra = Math.min(plus(), p); return p > 0 && extra ? round2(100 - share(p - extra, prov) / p * 100) : prov; };
+    const upd = () => { const i = $("a-info"); if (!i) return; const p = parsePrice($("a-preis").value); if (p == null) { i.textContent = ""; return; } const pv = provFor(p), a = share(p - Math.min(plus(), p), prov); i.textContent = `An ${ownerName(it.owner_id)}: ${chf(a)} (${100 - prov} %${plus() ? ` vom Mitgliederpreis` : ""}) · Among Friends: ${chf(round2(p - a))}${plus() ? ` (inkl. CHF ${CLUB_PLUS} Nichtmitglied)` : ` (${pv} %)`}`; };
+    if ($("a-club")) $("a-club").addEventListener("change", () => { if (it.preis != null) $("a-preis").value = Number(it.preis) + plus(); upd(); });
     $("a-preis").addEventListener("input", upd); $("a-datum").addEventListener("input", upd); upd();
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const p = parsePrice($("a-preis").value);
       if (p == null) return toast("Bitte den Verkaufspreis eingeben.");
       const btn = e.submitter; busy(btn, true);
-      const ok = await patchItem(it.id, { status: "Verkauft", verkauf_preis: p, verkauf_datum: $("a-datum").value || iso(today()), verkauf_provision: prov, ausbezahlt_am: null }, `${it.nr} verkauft`);
+      const ok = await patchItem(it.id, { status: "Verkauft", verkauf_preis: p, verkauf_datum: $("a-datum").value || iso(today()), verkauf_provision: provFor(p), ausbezahlt_am: null }, `${it.nr} verkauft`);
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
@@ -906,13 +925,14 @@ function openAction(kind, it) {
     };
   }
   if (kind === "upcycle") {
-    actForm(`<div class="sec" style="margin:0">Among Friends upcycelt</div>
-      <p class="hint">Das Teil kommt aus dem Laden auf deinen Upcycling-Stapel. Wird das neue Teil verkauft: ${UPC_PROV} % Among Friends, ${100 - UPC_PROV} % an die Owner.</p>
+    const red = it.stufe === "Reduziert", up = red ? UPC_PROV_RED : UPC_PROV;
+    actForm(`<div class="sec" style="margin:0">${red ? "Geht an Among Friends" : "Owner überlässt es Among Friends"}</div>
+      <p class="hint">${red ? "Nicht verkauft an der Reduziert-Stange: Das Teil gehört jetzt Among Friends." : "Die Owner holt das Teil nicht ab."} Es kommt auf deinen Upcycling-Stapel, ohne Zeitdruck. Wird es später upgecycelt verkauft: ${100 - up} % an die Owner, ${up} % Among Friends.</p>
       <label>Idee der Owner (freiwillig)<input id="a-notiz" maxlength="300" placeholder="z.B. als Crop-Top"></label>
       <div class="rowsmall"><button class="btn primary" type="submit">Auf den Upcycling-Stapel</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const btn = e.submitter; busy(btn, true);
-      const ok = await patchItem(it.id, { stufe: "Upcycling", status: "Entwurf", phase_monat: null, entscheid: "Upcycling", entscheid_datum: null, entscheid_notiz: val("a-notiz") || null, entscheid_von: "Team" }, `${it.nr} liegt auf dem Upcycling-Stapel`);
+      const ok = await patchItem(it.id, { stufe: "Upcycling", status: "Entwurf", phase_monat: null, verkauf_provision: up, entscheid: "Upcycling", entscheid_datum: null, entscheid_notiz: val("a-notiz") || null, entscheid_von: "Team" }, `${it.nr} liegt auf dem Upcycling-Stapel`);
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
@@ -935,14 +955,15 @@ function openAction(kind, it) {
   }
   if (kind === "takeback" || kind === "toonline") {
     const online = kind === "toonline";
-    actForm(`<div class="sec" style="margin:0">Zurücknehmen · Abholung am Samstag</div>
-      <label>Abhol-Samstag<select id="a-datum">${satOptions()}</select></label>
+    const p = phaseInfo(it), ende = p && p.end >= today() ? iso(p.end) : null;
+    actForm(`<div class="sec" style="margin:0">Owner holt ab · Samstag ${ABHOL_ZEIT}</div>
+      <label>Abhol-Samstag<select id="a-datum">${ende ? `<option value="${ende}">${fmt(ende)} · Ende der Runde</option>` : ""}${satOptions()}</select></label>
       ${it.stufe && it.stufe !== "Stange" ? `<label class="check"><input id="a-online" type="checkbox" ${online ? "checked" : ""}> Danach online weiterverkaufen (Owner bewahrt es auf und verschickt es)</label>` : ""}
       <div class="rowsmall"><button class="btn primary" type="submit">Abholung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const btn = e.submitter; busy(btn, true);
       const online = $("a-online") && $("a-online").checked;
-      const ok = await patchItem(it.id, { entscheid: "Zurücknehmen", entscheid_datum: $("a-datum").value, entscheid_notiz: online ? ONLINE_NOTIZ : null, entscheid_von: "Team" }, "Abholung gespeichert");
+      const ok = await patchItem(it.id, { entscheid: "Zurücknehmen", entscheid_datum: $("a-datum").value, entscheid_notiz: online ? ONLINE_NOTIZ : ABHOL_ZEIT, entscheid_von: "Team" }, "Abholung gespeichert");
       busy(btn, false); if (ok) showItem(it.id);
     };
   }
@@ -984,6 +1005,7 @@ async function runAct(kind, btn) {
     if (it.entscheid === "Zurücknehmen" && it.entscheid_notiz === ONLINE_NOTIZ) { patch = { stufe: "Online", status: "Verfügbar", phase_monat: null, entscheid: null, entscheid_datum: null, entscheid_notiz: null }; msg = `${it.nr} abgeholt und jetzt auf der Online-Stange`; }
     if (it.entscheid === "Upcycling") { patch = { stufe: "Upcycling", phase_monat: nextPhase(it.phase_monat), entscheid: null, entscheid_datum: null, entscheid_notiz: null, status: "Verfügbar" }; msg = `${it.nr} hängt jetzt an der Upcycling-Stange. Preis bei Bedarf unter «Bearbeiten» anpassen.`; }
     if (it.entscheid === "Spenden") { patch = { status: "Gespendet" }; msg = `${it.nr} gespendet`; }
+    if (it.entscheid === "Überlassen") { patch = { stufe: "Upcycling", status: "Entwurf", phase_monat: null, verkauf_provision: UPC_PROV, entscheid: "Upcycling", entscheid_datum: null }; msg = `${it.nr} liegt auf dem Upcycling-Stapel`; }
     const ok = await patchItem(id, patch, msg); if (ok) showItem(id); else busy(btn, false); return;
   }
 }
@@ -1120,7 +1142,7 @@ function ownerForm(o) {
       <div class="sec" style="margin:8px 0 0">Intern · nie öffentlich</div>
       <label>Voller Name<input id="o-voller_name" value="${esc(o.voller_name || "")}"></label>
       <div class="two"><label>E-Mail<input id="o-email" type="email" value="${esc(o.email || "")}"></label><label>Telefon<input id="o-telefon" type="tel" value="${esc(o.telefon || "")}"></label></div>
-      <div class="two"><label>Anteil Among Friends %<input id="o-provision_prozent" inputmode="decimal" value="${esc(o.provision_prozent ?? 10)}"></label><label>Vereinbarung vom<input id="o-vereinbarung_datum" type="date" value="${esc(o.vereinbarung_datum || "")}"></label></div>
+      <div class="two"><label>Anteil Among Friends %<input id="o-provision_prozent" inputmode="decimal" value="${esc(o.provision_prozent ?? OWNER_PROV)}"></label><label>Vereinbarung vom<input id="o-vereinbarung_datum" type="date" value="${esc(o.vereinbarung_datum || "")}"></label></div>
       <label>Notiz<textarea id="o-notiz" rows="2">${esc(o.notiz || "")}</textarea></label>
       <p class="hint">Anteil Among Friends = deine Provision. Bei 10 % erhält die Owner 90 % jedes Verkaufs und jeder Miete. Bankdaten (IBAN) bitte nicht hier speichern, sondern im E-Banking.</p>
       <div class="row" style="margin-top:0"><button class="btn primary" type="submit">${isNew ? "Owner anlegen" : "Speichern"}</button></div>
@@ -1130,7 +1152,7 @@ function ownerForm(o) {
     const row = { profilname: val("o-profilname"), stil: val("o-stil"), instagram: val("o-instagram"), oeffentlich: $("o-oeffentlich").checked,
       voller_name: val("o-voller_name"), email: val("o-email"), telefon: val("o-telefon"), vereinbarung_datum: val("o-vereinbarung_datum"), notiz: val("o-notiz") };
     const prov = parsePrice($("o-provision_prozent").value);
-    row.provision_prozent = prov == null ? 10 : Math.min(100, prov);
+    row.provision_prozent = prov == null ? OWNER_PROV : Math.min(100, prov);
     if (!row.profilname) return toast("Bitte einen Profilnamen eingeben.");
     const btn = e.submitter; busy(btn, true);
     const q = isNew ? sb.from("owners").insert(row).select().single() : sb.from("owners").update(row).eq("id", o.id).select().single();
@@ -1303,7 +1325,7 @@ async function anmAction(kind, btn) {
   if (kind === "mkowner") {
     busy(btn, true, "Wird angelegt …");
     const row = { profilname: a.vorname, voller_name: anmName(a), email: a.email, telefon: a.telefon, instagram: a.instagram,
-      stil: anmStile(a).join(", ") || null, provision_prozent: 10, vereinbarung_datum: iso(today()), notiz: "Aus Anmeldung vom " + fmt(a.created_at.slice(0, 10)) };
+      stil: anmStile(a).join(", ") || null, provision_prozent: OWNER_PROV, vereinbarung_datum: iso(today()), notiz: "Aus Anmeldung vom " + fmt(a.created_at.slice(0, 10)) };
     const { data, error } = await sb.from("owners").insert(row).select().single();
     if (error) { busy(btn, false); return toast(nice(error), 4500); }
     OWNERS = OWNERS.concat(data).sort((x, y) => x.id.localeCompare(y.id));
