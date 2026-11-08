@@ -34,7 +34,12 @@ function etiQrSvg(text) {
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 ${n + 4} ${n + 4}" shape-rendering="crispEdges"><rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><path d="${d}" fill="#111110"/></svg>`;
 }
-function etiPrice(it) { const p = Number(it.preis); return it.preis != null && it.preis !== "" && !isNaN(p) ? "CHF " + (p % 1 ? p.toFixed(2) : p) : "CHF ___"; }
+/* Hauptstange: gespeicherter Preis = Preis für Club-Mitglieder. Nichtmitglieder zahlen CHF 10 mehr. */
+const ETI_CLUB_PLUS = 10;
+function etiNum(p) { return "CHF " + (p % 1 ? p.toFixed(2) : p); }
+function etiHas(it) { const p = Number(it.preis); return it.preis != null && it.preis !== "" && !isNaN(p); }
+function etiClub(it) { return etiHas(it) && (it.stufe || "Stange") === "Stange"; }
+function etiPrice(it) { return etiHas(it) ? etiNum(Number(it.preis) + (etiClub(it) ? ETI_CLUB_PLUS : 0)) : "CHF ___"; }
 function etiSize(it) { return (SZ && SZ.label ? SZ.label(it) : "") || it.groesse || "–"; }
 /* Layout wie freigegebene Vorschau (Oktober 2026) */
 function etiLabel(it, lang) {
@@ -48,6 +53,7 @@ function etiLabel(it, lang) {
       <div class="title">${esc(it.titel || "")}</div>
       ${meta ? `<div class="meta">${esc(meta)}</div>` : ""}
       <div class="price">${esc(etiPrice(it))}</div>
+      ${etiClub(it) ? `<div class="club">Among Friends Club <b>${esc(etiNum(Number(it.preis)))}</b></div>` : ""}
       <div class="qrrow"><div class="qr">${etiQrSvg(etiShopUrl(it.nr, lang))}</div><div class="qrtxt"><span class="nr">${esc(it.nr)}</span>${T.scan}</div></div>
     </div>
     <div class="foot">SECOND HAND AMONG FRIENDS</div>
@@ -76,6 +82,8 @@ body{font-family:"Archivo","Helvetica Neue",Arial,sans-serif;color:#111110;backg
 .title{font-weight:600;font-size:9pt;line-height:1.15;max-height:2.3em;overflow:hidden}
 .meta{font-family:"IBM Plex Mono",Menlo,monospace;font-weight:500;font-size:6.4pt;color:#66655F;margin-top:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .price{font-weight:800;font-stretch:112.5%;font-size:17pt;line-height:1;margin-top:2.2mm;white-space:nowrap}
+.club{font-family:"IBM Plex Mono",Menlo,monospace;font-weight:500;font-size:6.6pt;margin-top:1.4mm;white-space:nowrap;text-transform:uppercase;letter-spacing:.02em}
+.club b{font-family:"Archivo",Arial,sans-serif;font-weight:800;font-stretch:112.5%;font-size:9pt;color:#E10600;letter-spacing:0}
 .qrrow{display:flex;gap:2.6mm;align-items:flex-end;margin-top:auto;padding-bottom:3mm}
 .qr{width:21mm;height:21mm;flex:none}
 .qr svg{width:100%;height:100%;display:block}

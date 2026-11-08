@@ -93,3 +93,7 @@ label.short{max-width:260px}
 /* Gedanke zum Look (Fotoecke) */
 .gedanke{display:block;font-size:14px;line-height:1.4;font-style:italic;color:var(--ink);text-align:left;overflow-wrap:anywhere}
 .gedanke.gross{font-size:18px;margin:10px 0 14px;padding-left:12px;border-left:3px solid var(--red)}
+
+/* Club-Preis (Hauptstange) */
+.clubp{display:block;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--red, #E10600);text-align:right;margin-top:2px}
+.sprice .clubp{text-align:left;font-size:13px;margin-top:4px}

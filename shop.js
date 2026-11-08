@@ -35,6 +35,11 @@ function saveSel() { try { localStorage.setItem(SEL_KEY, JSON.stringify(SEL)); }
 
 /* ---------- Hilfen ---------- */
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+/* Hauptstange: gespeicherter Preis = Club-Preis. Nichtmitglieder zahlen CHF 10 mehr. */
+const CLUB_PLUS = 10;
+function isClub(it) { return it.preis != null && it.preis !== "" && (it.stufe || "Stange") === "Stange"; }
+function shopPrice(it) { return isClub(it) ? Number(it.preis) + CLUB_PLUS : it.preis; }
+function clubLine(it) { return isClub(it) ? `<span class="clubp">Club ${esc(chf(it.preis))}</span>` : ""; }
 function chf(v) { if (v === null || v === undefined || v === "") return "Preis im Laden"; const n = Number(v); return "CHF " + n.toFixed(n % 1 ? 2 : 0); }
 function known(v) { return v != null && v !== "" && !/prüfen|unbekannt|\?/i.test(String(v)); }
 function clean(v) { return String(v).replace(/\s*\(.*?\)\s*/g, " ").trim(); }
@@ -180,7 +185,7 @@ function card(it) {
   return `
     <button class="card" type="button" data-item="${esc(it.nr)}">
       <div class="ph">${imgTag(it.foto_pfad, it.titel)}<span class="tag">${esc(it.nr)}</span></div>
-      <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price">${esc(chf(it.preis))}</span></div>
+      <div class="meta"><span class="title">${esc(it.titel)}</span><span class="price">${esc(chf(shopPrice(it)))}${clubLine(it)}</span></div>
       <div class="line2">${badge(it)}${franklyPill(it)}<span>${esc(known(it.groesse) && SZ.label(it) ? "Gr. " + SZ.label(it) : (it.unterkategorie || it.kategorie || ""))}</span></div>
     </button>`;
 }
@@ -322,7 +327,7 @@ function showItem(nr) {
       <div>
         <div class="nr"><small>Nummer</small>${esc(it.nr)}</div>
         <h2 class="dt">${esc(it.titel)}</h2>
-        <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}${franklyPill(it)}</div>
+        <div class="statusrow"><span class="sprice">${esc(chf(shopPrice(it)))}${isClub(it) ? `<small class="clubp">Among Friends Club ${esc(chf(it.preis))}</small>` : ""}</span>${badge(it)}${franklyPill(it)}</div>
         ${it.owner_id === "OWN-001" ? `<p class="hint">Among-Friends-Teil: Hier gilt dein Fotoecke-Gutschein.</p>` : ""}
         ${it.stufe === "Upcycling" ? `<p class="hint">${t("Upcycled by Among Friends: Aus einem Secondhand-Teil neu gemacht, ein Einzelstück.")} ${(it.fotos_extra || []).some(f => f.art === "Vorher") ? t("Unter «Vorher» siehst du das Original.") : ""} ${t("Die ursprüngliche Owner bekommt einen Teil vom Preis.")}</p>` : ""}
         ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? t("Dieses Teil ist bis {d} vermietet und danach wieder im Laden.", { d: esc(shortDate(RENT[it.id].bis)) }) : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
