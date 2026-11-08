@@ -1,7 +1,7 @@
 /* =========================================================
-   0–100 FRANKLY · LAGER · Tab «Finanzen»
+   SECONDHAND AMONG FRIENDS · LAGER · Tab «Finanzen»
    Ziel pro Monat (Menge × Ø Preis) neben dem, was wirklich passiert ist.
-   Automatisch: Verkäufe (Owner-Teile und Frankly-Teile) und Vermietungen.
+   Automatisch: Verkäufe (Owner-Teile und Among-Friends-Teile) und Vermietungen.
    Von Hand: Servicepauschale, Workshop, Create Together, Basteltisch, Anpassungen …
    Läuft nach app.js. Braucht supabase/18_finanzen.sql.
    ========================================================= */
@@ -11,14 +11,14 @@ const FIN_ARTEN = ["Servicepauschale", "Workshop", "Create Together", "Basteltis
 /* Reihenfolge und Beschreibung der Zeilen. art = Name in «einnahmen» (von Hand) */
 const FIN_QUELLEN = [
   { q: "Verkauf Owner-Teile", auto: true, einheit: "Teile", txt: "Deine Provision auf verkaufte Owner-Teile" },
-  { q: "Frankly-Teile", auto: true, einheit: "Teile", txt: "Deine eigenen Teile, 100 % für dich" },
+  { q: "Among-Friends-Teile", auto: true, einheit: "Teile", txt: "Deine eigenen Teile, 100 % für dich" },
   { q: "Vermietung", auto: true, einheit: "Vermietungen", txt: "Dein Anteil an der Miete" },
   { q: "Servicepauschale", art: "Servicepauschale", einheit: "Owner", txt: "pro Owner bei der Abgabe" },
   { q: "Workshop", art: "Workshop", einheit: "Personen", txt: "Teilnehmende im Monat" },
   { q: "Create Together", art: "Create Together", einheit: "Termine", txt: "Begleitung bei eigenen Ideen" },
   { q: "Basteltisch", art: "Basteltisch", einheit: "Besuche", txt: "Platz und Material" },
   { q: "Anpassung", art: "Anpassung", einheit: "Aufträge", txt: "Kürzen, enger machen" },
-  { q: "Mitgliedschaft", art: "Mitgliedschaft", einheit: "Mitglieder", txt: "Frankly Friends, Beitrag pro Monat" },
+  { q: "Mitgliedschaft", art: "Mitgliedschaft", einheit: "Mitglieder", txt: "Among Friends Club, Beitrag pro Monat" },
   { q: "Zuschlag Nichtmitglieder", art: "Zuschlag Nichtmitglieder", einheit: "Teile", txt: "Zuschlag pro Teil für Nichtmitglieder" },
   { q: "Anderes", art: "Anderes", einheit: "", txt: "alles andere" }
 ];
@@ -51,7 +51,7 @@ function finIst(k) {
   const sold = ITEMS.filter(i => i.status === "Verkauft" && i.verkauf_datum && finMonthKey(i.verkauf_datum) === k);
   const own = sold.filter(i => i.owner_id !== SELF), self = sold.filter(i => i.owner_id === SELF);
   ist["Verkauf Owner-Teile"] = { n: own.length, chf: own.reduce((s, i) => { const p = i.verkauf_provision != null ? Number(i.verkauf_provision) : ownerProv(i.owner_id); return s + (saleAmount(i) || 0) * p / 100; }, 0), umsatz: own.reduce((s, i) => s + (saleAmount(i) || 0), 0) };
-  ist["Frankly-Teile"] = { n: self.length, chf: self.reduce((s, i) => s + (saleAmount(i) || 0), 0) };
+  ist["Among-Friends-Teile"] = { n: self.length, chf: self.reduce((s, i) => s + (saleAmount(i) || 0), 0) };
   const rents = RENTALS.filter(r => r.von && finMonthKey(r.von) === k);
   ist["Vermietung"] = { n: rents.length, chf: rents.reduce((s, r) => { const it = ITEMS.find(x => x.id === r.item_id); const p = it && it.owner_id === SELF ? 100 : Number(r.provision_prozent); return s + Number(r.betrag) * p / 100; }, 0), umsatz: rents.reduce((s, r) => s + Number(r.betrag), 0) };
   FIN_QUELLEN.filter(x => x.art).forEach(x => {

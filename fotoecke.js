@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · LAGER · Tab «Fotoecke»
+   SECONDHAND AMONG FRIENDS · LAGER · Tab «Fotoecke»
    Fotos, die Besucherinnen über foto.html hochgeladen haben:
    ansehen, freigeben, Gutschein einlösen. Läuft nach app.js.
    ========================================================= */
@@ -69,12 +69,12 @@ async function saveTeile(id, btn) {
   FOTOS = FOTOS.map(f => f.id === id ? data : f); renderFotoecke();
   toast(unknown.length ? `Gespeichert. Unbekannte Nummer: ${unknown.join(", ")}` : "Teile gespeichert", 4000);
 }
-const GUTSCHEIN_GILT = "auf alle Teile mit dem Etikett «Frankly-Teil»";
+const GUTSCHEIN_GILT = "auf alle Teile mit dem Etikett «Among-Friends-Teil»";
 async function sendGsMail(id) {
   const f = FOTOS.find(x => x.id === id); if (!f || !f.email) return;
   const hi = f.name ? `Hallo ${f.name}` : "Hallo";
-  const body = `${hi}\n\nherzlichen Dank für dein Foto aus der Frankly-Fotoecke! Es ist schön zu sehen, wie du unsere Teile trägst.\n\nHier ist dein Gutschein über CHF 5:\n\n${f.gutschein}\n\nEr gilt ${GUTSCHEIN_GILT}. Zeig den Code einfach im Laden an der Kasse. Ein Gutschein pro Besuch, nicht bar auszahlbar.\n\n0–100 Frankly · Josy, Neue Hard 10, 8005 Zürich\nMi–Fr 13–19 Uhr, Sa 9.30–17 Uhr` + GRUSS;
-  mailTo(f.email, "Dein Gutschein von 0–100 Frankly", body);
+  const body = `${hi}\n\nherzlichen Dank für dein Foto aus der Among-Friends-Fotoecke! Es ist schön zu sehen, wie du unsere Teile trägst.\n\nHier ist dein Gutschein über CHF 5:\n\n${f.gutschein}\n\nEr gilt ${GUTSCHEIN_GILT}. Zeig den Code einfach im Laden an der Kasse. Ein Gutschein pro Besuch, nicht bar auszahlbar.\n\nSecondhand among Friends · Josy, Neue Hard 10, 8005 Zürich\nMi–Fr 13–19 Uhr, Sa 9.30–17 Uhr` + GRUSS;
+  mailTo(f.email, "Dein Gutschein von Secondhand among Friends", body);
   const { data, error } = await sb.from("fotoecke").update({ mail_gesendet_am: new Date().toISOString() }).eq("id", id).select().single();
   if (!error) { FOTOS = FOTOS.map(x => x.id === id ? data : x); renderFotoecke(); }
 }

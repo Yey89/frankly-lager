@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · LAGER · Tab «Erkenntnisse»
+   SECONDHAND AMONG FRIENDS · LAGER · Tab «Erkenntnisse»
    Wertet die eigenen Daten aus (was verkauft sich, was bleibt liegen, was geben
    Owner ab und warum, was tragen Kundinnen seit Jahren) und sammelt
    «Lieblingsteile»-Karten. Grundlage für die spätere Kollektion.

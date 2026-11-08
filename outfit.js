@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · Outfit-Bild für Looks
+   SECONDHAND AMONG FRIENDS · Outfit-Bild für Looks
    Ordnet die Teile eines Looks wie ein Outfit an
    (Jacke, Oberteil, Hose/Rock oder Kleid, Schuhe, Tasche, Accessoire)
    und würfelt neue Kombinationen aus den Teilen eines Stil-Looks:

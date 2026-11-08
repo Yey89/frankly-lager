@@ -1,9 +1,9 @@
 /* =========================================================
-   0–100 FRANKLY · LAGER · Etiketten drucken
+   SECONDHAND AMONG FRIENDS · LAGER · Etiketten drucken
    Teile auswählen → A4-Blatt mit 12 Hängeetiketten (5 × 9 cm).
    Jedes Etikett hat einen eigenen QR-Code zum Teil im Shop
    (dort: «So kannst du es kombinieren»).
-   Zwei Layouts: «Frankly-Teil» (OWN-001) und Owner-Teil.
+   Zwei Layouts: «Among-Friends-Teil» (OWN-001) und Owner-Teil.
    QR-Codes: qrcode-generator (MIT), wird erst beim Drucken geladen.
    Läuft nach app.js.
    ========================================================= */
@@ -15,8 +15,8 @@ let etiSel = new Set(), etiFilter = "laden";
 function etiShopUrl(nr, lang) { const u = new URL("./", location.href); u.search = "?teil=" + nr + (lang === "en" ? "&lang=en" : ""); u.hash = ""; return u.href; }
 /* Texte: Vorderseite Deutsch, Rückseite Englisch */
 const ETI_TXT = {
-  de: { badge: "FRANKLY-TEIL", voucher: "Hier gilt dein Fotoecke-Gutschein", from: "Aus dem Kleiderschrank von", friend: "einer Frankly-Freundin", size: "Grösse", scan: "Scannen und sehen, wie du es kombinierst" },
-  en: { badge: "FRANKLY PIECE", voucher: "Your photo corner voucher applies here", from: "From the closet of", friend: "a Frankly friend", size: "Size", scan: "Scan to see how to style it" }
+  de: { badge: "AMONG FRIENDS", voucher: "Hier gilt dein Fotoecke-Gutschein", from: "Aus dem Kleiderschrank von", friend: "einer Freundin", size: "Grösse", scan: "Scannen und sehen, wie du es kombinierst" },
+  en: { badge: "AMONG FRIENDS", voucher: "Your photo corner voucher applies here", from: "From the closet of", friend: "a friend", size: "Size", scan: "Scan to see how to style it" }
 };
 function etiLoadQr() {
   if (window.qrcode) return Promise.resolve();
@@ -41,7 +41,7 @@ function etiLabel(it, lang) {
   const T = ETI_TXT[lang || "de"], own = it.owner_id === "OWN-001", o = ownerOf(it.owner_id);
   const size = etiSize(it), meta = [size && size !== "–" ? T.size + " " + size : "", it.marke || ""].filter(Boolean).join(" · ");
   return `<div class="tag${own ? " own" : ""}"><span class="hole"></span>
-    <div class="head">0–100 <b>FRANKLY</b></div>
+    <div class="head">SECONDHAND <i>among</i> <b>FRIENDS</b></div>
     ${own ? `<div class="badge">${T.badge}<small>${T.voucher}</small></div>`
           : `<div class="from">${T.from}<b>${esc(o ? o.profilname : T.friend)}</b></div>`}
     <div class="body">
@@ -63,8 +63,9 @@ body{font-family:"Archivo","Helvetica Neue",Arial,sans-serif;color:#111110;backg
 .tag{position:relative;width:50mm;height:90mm;background:#fff;display:flex;flex-direction:column;overflow:hidden;outline:.2mm dashed #b9b8b2;outline-offset:-.1mm}
 .tag.empty{outline-color:transparent}
 .hole{position:absolute;top:4mm;left:50%;width:4.5mm;height:4.5mm;margin-left:-2.25mm;border-radius:50%;border:.3mm solid #9c9b94;background:#fff;z-index:3}
-.head{padding:10.5mm 3mm 2.6mm;text-align:center;font-weight:800;font-stretch:112.5%;font-size:11.5pt;line-height:1;border-bottom:.5mm solid #111110;white-space:nowrap}
+.head{padding:10.5mm 2mm 2.6mm;text-align:center;font-weight:800;font-stretch:112.5%;font-size:7.4pt;line-height:1;border-bottom:.5mm solid #111110;white-space:nowrap}
 .head b{color:#E10600;font-weight:inherit}
+.head i{font-family:"IBM Plex Mono",Menlo,monospace;font-style:normal;font-weight:500;font-size:.75em;text-transform:none;margin:0 .1em}
 .own .head{background:#111110;color:#fff;border-bottom:0}
 .own .head b{color:#fff}
 .badge{background:#E10600;color:#fff;font-weight:800;font-stretch:112.5%;font-size:9pt;text-align:center;padding:1.6mm 2mm 1.4mm;letter-spacing:.04em}
@@ -100,7 +101,7 @@ function etiDoc(items, skip, duplex) {
       pages.push(`<div class="sheet back">${back.map(it => it ? etiLabel(it, "en") : EMPTY).join("")}</div>`);
     }
   }
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Frankly Etiketten</title>
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Among Friends Etiketten</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@500;600&display=block">
 <style>${ETI_CSS}</style></head><body>
 <p class="hint">${items.length} Etiketten · Drucken auf A4, Grösse 100 %, «An Seite anpassen» ausschalten.${duplex ? " <b>Beidseitig drucken, an der langen Kante wenden</b> (Vorderseite Deutsch, Rückseite Englisch)." : ""} Danach entlang der gestrichelten Linien schneiden und lochen.</p>
@@ -134,7 +135,7 @@ function etiRenderList() {
   const list = etiList();
   el.innerHTML = list.length ? list.map(it => `<label class="etirow"><input type="checkbox" data-eti="${esc(it.id)}" ${etiSel.has(it.id) ? "checked" : ""}>
       ${imgUrl(it.foto_pfad) ? `<img src="${esc(imgUrl(it.foto_pfad))}" alt="">` : `<span class="nofoto"></span>`}
-      <span><b>${esc(it.nr)}</b> ${esc(it.titel || "")}<br><span class="hint">${it.owner_id === "OWN-001" ? "Frankly-Teil" : esc(ownerName(it.owner_id))} · ${esc(etiPrice(it))} · ${esc(it.status)}</span></span></label>`).join("")
+      <span><b>${esc(it.nr)}</b> ${esc(it.titel || "")}<br><span class="hint">${it.owner_id === "OWN-001" ? "Among-Friends-Teil" : esc(ownerName(it.owner_id))} · ${esc(etiPrice(it))} · ${esc(it.status)}</span></span></label>`).join("")
     : `<p class="hint">Keine Teile gefunden.</p>`;
   $("etiCount").textContent = etiSel.size ? `${etiSel.size} ausgewählt · ${Math.ceil((etiSel.size + (parseInt($("etiSkip").value, 10) || 0)) / ETI_PER_PAGE)} A4-Blatt` : "Noch nichts ausgewählt";
 }
@@ -142,7 +143,7 @@ function showEtiketten() {
   openPanel(`
     <div class="phead"><span class="sub">Etiketten drucken</span><button class="btn ghost close" type="button" data-close>Schliessen ✕</button></div>
     <h2 class="dt" style="margin:0 0 6px">Etiketten drucken</h2>
-    <p class="hint">Teile auswählen. Jedes Etikett bekommt automatisch seinen QR-Code. Deine Teile (OWN-001) bekommen das schwarz-rote Etikett «Frankly-Teil», alle anderen das weisse mit dem Namen der Owner. 12 Etiketten pro A4-Blatt, je 5 × 9 cm.</p>
+    <p class="hint">Teile auswählen. Jedes Etikett bekommt automatisch seinen QR-Code. Deine Teile (OWN-001) bekommen das schwarz-rote Etikett «Among-Friends-Teil», alle anderen das weisse mit dem Namen der Owner. 12 Etiketten pro A4-Blatt, je 5 × 9 cm.</p>
     <div class="tools" style="margin-top:10px">
       <input class="search" id="etiQ" type="search" placeholder="Suchen: Nummer, Titel, Owner …" aria-label="Teile suchen">
       <div class="chips"><button class="chip" type="button" data-etif="laden" aria-pressed="${etiFilter === "laden"}">Im Laden</button><button class="chip" type="button" data-etif="alle" aria-pressed="${etiFilter === "alle"}">Alle</button></div>

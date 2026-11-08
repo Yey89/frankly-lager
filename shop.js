@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · ÖFFENTLICHER SHOP
+   SECONDHAND AMONG FRIENDS · ÖFFENTLICHER SHOP
    Ohne Login. Liest nur, was die Datenbank öffentlich freigibt
    (siehe supabase/04_shop_anmeldungen.sql) und nimmt Anmeldungen entgegen.
    ========================================================= */
@@ -54,7 +54,7 @@ function uuid() {
 }
 function shortDate(s) { if (!s) return ""; const [y, m, d] = String(s).slice(0, 10).split("-"); return `${d}.${m}.`; }
 function rentText(it) { const r = RENT[it.id]; return r && r.bis ? `Vermietet bis ${shortDate(r.bis)}` : "Gerade vermietet"; }
-function franklyPill(it) { return it.owner_id === "OWN-001" ? `<span class="pill fpill">Frankly-Teil</span>` : ""; }
+function franklyPill(it) { return it.owner_id === "OWN-001" ? `<span class="pill fpill">Among-Friends-Teil</span>` : ""; }
 function resText(iso) {
   const d = new Date(iso), wt = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][d.getDay()];
   return `${wt} ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}., ${d.getHours()}${d.getMinutes() ? "." + String(d.getMinutes()).padStart(2, "0") : ""} Uhr`;
@@ -65,7 +65,7 @@ function badge(it) {
   if (it.stufe === "Lager") return `<span class="pill">Auf Anfrage</span>`;
   if (it.stufe === "Online") return `<span class="pill">Versand durch Owner</span>`;
   if (it.stufe === "Reduziert") return `<span class="pill sold">Reduziert</span>`;
-  if (it.stufe === "Upcycling") return `<span class="pill fpill">Upcycled by Frankly</span>`;
+  if (it.stufe === "Upcycling") return `<span class="pill fpill">Upcycled by Among Friends</span>`;
   return "";
 }
 
@@ -83,7 +83,7 @@ function renderInfo() {
       <span class="klabel">Öffnungszeiten</span>
       <table class="hours">${hours}</table>
     </div>`;
-  $("footInfo").innerHTML = `<b>0–100 Frankly</b> · ${esc(SHOP.strasse)}, ${esc(SHOP.plz)}`;
+  $("footInfo").innerHTML = `<b>Secondhand among Friends</b> · ${esc(SHOP.strasse)}, ${esc(SHOP.plz)} · <a href="https://www.instagram.com/s.amongfriends/" target="_blank" rel="noopener">@s.amongfriends</a>`;
 }
 
 /* ---------- Daten laden ---------- */
@@ -227,7 +227,7 @@ function applySel(all) {
   renderGrid();
   const t = $("shopTools"); if (t && t.scrollIntoView) t.scrollIntoView({ block: "start" });
 }
-/* Looks aus der Fotoecke: echte Menschen, die Frankly-Teile tragen */
+/* Looks aus der Fotoecke: echte Menschen, die Among-Friends-Teile tragen */
 function streetItems(f) {
   const nrs = (String(f.teile || "").toUpperCase().match(/FR-?\d{1,6}/g) || []).map(n => "FR-" + n.replace(/\D/g, "").padStart(6, "0"));
   return [...new Set(nrs)].map(n => ITEMS.find(x => x.nr === n)).filter(Boolean);
@@ -289,7 +289,7 @@ function comboWith(l, it) {
   return c.length ? c : null;
 }
 function renderLooks() {
-  const own = `<h3 class="osec">Looks von Frankly</h3>` + (LOOKS.length ? `<div class="looks">${LOOKS.slice().sort((a, b) => STYLE_ORDER.indexOf(a.style) - STYLE_ORDER.indexOf(b.style)).map(l => lookCard(l)).join("")}</div>` : `<p class="hint">Bald zeigen wir hier, wie du unsere Teile kombinieren kannst.</p>`);
+  const own = `<h3 class="osec">Looks von Among Friends</h3>` + (LOOKS.length ? `<div class="looks">${LOOKS.slice().sort((a, b) => STYLE_ORDER.indexOf(a.style) - STYLE_ORDER.indexOf(b.style)).map(l => lookCard(l)).join("")}</div>` : `<p class="hint">Bald zeigen wir hier, wie du unsere Teile kombinieren kannst.</p>`);
   const street = `<h3 class="osec">Aus der Fotoecke</h3>` + (STREET.length ? `<div class="looks">${STREET.map(streetCard).join("")}</div>` : `<p class="hint">Hier erscheinen bald Fotos von euch. Probier im Laden, mach dein Foto in der Fotoecke und teile es mit uns: Dafür gibt es einen Gutschein.</p>`);
   $("lookGrid").innerHTML = own + street;
 }
@@ -323,10 +323,10 @@ function showItem(nr) {
         <div class="nr"><small>Nummer</small>${esc(it.nr)}</div>
         <h2 class="dt">${esc(it.titel)}</h2>
         <div class="statusrow"><span class="sprice">${esc(chf(it.preis))}</span>${badge(it)}${franklyPill(it)}</div>
-        ${it.owner_id === "OWN-001" ? `<p class="hint">Frankly-Teil: Hier gilt dein Fotoecke-Gutschein.</p>` : ""}
-        ${it.stufe === "Upcycling" ? `<p class="hint">Upcycled by Frankly: Aus einem Secondhand-Teil neu gemacht, ein Einzelstück. ${(it.fotos_extra || []).some(f => f.art === "Vorher") ? "Unter «Vorher» siehst du das Original." : ""} Die ursprüngliche Owner bekommt einen Teil vom Preis.</p>` : ""}
-        ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? `Dieses Teil ist bis ${esc(shortDate(RENT[it.id].bis))} vermietet und danach wieder im Laden.` : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
-        ${it.status === "Reserviert" ? `<p class="hint">${it.reserviert_bis ? `Dieses Teil ist bis ${esc(resText(it.reserviert_bis))} reserviert. Danach ist es vielleicht wieder frei.` : "Dieses Teil ist für jemanden reserviert."}</p>` : ""}
+        ${it.owner_id === "OWN-001" ? `<p class="hint">Among-Friends-Teil: Hier gilt dein Fotoecke-Gutschein.</p>` : ""}
+        ${it.stufe === "Upcycling" ? `<p class="hint">${t("Upcycled by Among Friends: Aus einem Secondhand-Teil neu gemacht, ein Einzelstück.")} ${(it.fotos_extra || []).some(f => f.art === "Vorher") ? t("Unter «Vorher» siehst du das Original.") : ""} ${t("Die ursprüngliche Owner bekommt einen Teil vom Preis.")}</p>` : ""}
+        ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? t("Dieses Teil ist bis {d} vermietet und danach wieder im Laden.", { d: esc(shortDate(RENT[it.id].bis)) }) : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
+        ${it.status === "Reserviert" ? `<p class="hint">${it.reserviert_bis ? t("Dieses Teil ist bis {d} reserviert. Danach ist es vielleicht wieder frei.", { d: esc(resText(it.reserviert_bis)) }) : "Dieses Teil ist für jemanden reserviert."}</p>` : ""}
         ${it.status === "Verfügbar" && ["Stange", "Reduziert", "Upcycling"].includes(it.stufe || "Stange") ? resBox(it) : ""}
         ${(it.stufe === "Lager" || it.stufe === "Online") && it.status === "Verfügbar" ? anfrageBox(it) : ""}
         ${facts.length ? `<dl class="f">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(clean(v))}</dd>`).join("")}</dl>` : ""}
@@ -373,7 +373,7 @@ async function sendRes(form) {
   if (it) { it.status = "Reserviert"; it.reserviert_bis = data; renderGrid && renderGrid(); }
   form.hidden = true; $("resOpen").hidden = true;
   const done = $("r-done"); done.hidden = false;
-  done.innerHTML = `Reserviert bis <b>${esc(resText(data))}</b>. Komm vorbei: ${esc(SHOP.strasse)}, ${esc(SHOP.plz)}. Sag an der Kasse deinen Namen und die Nummer <b>${esc(it ? it.nr : "")}</b>.`;
+  done.innerHTML = t("Reserviert bis <b>{d}</b>. Komm vorbei: {a}. Sag an der Kasse deinen Namen und die Nummer <b>{nr}</b>.", { d: esc(resText(data)), a: esc(SHOP.strasse) + ", " + esc(SHOP.plz), nr: esc(it ? it.nr : "") });
 }
 document.addEventListener("submit", e => { const f = e.target.closest("#resForm"); if (f) { e.preventDefault(); sendRes(f); } });
 document.addEventListener("click", e => { if (e.target.closest("#resOpen")) { $("resForm").hidden = false; e.target.closest("#resOpen").hidden = true; $("r-name").focus(); } });
@@ -489,18 +489,18 @@ async function submitJoin() {
   const email = v("j-email");
   const stile = picked("[data-stil]").map(b => b.dataset.stil);
   const fehler = [];
-  if (!v("j-vorname")) fehler.push("Vorname");
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fehler.push("gültige E-Mail");
-  if (!stile.length) fehler.push("mindestens ein Stil-Bild");
-  if ($("j-vermieten").checked && !rentFiles.length) fehler.push("Fotos der Teile zum Vermieten");
-  if (!$("j-ok").checked) fehler.push("Zustimmung zu den Bedingungen");
-  if (fehler.length) { err.textContent = "Bitte noch ergänzen: " + fehler.join(", ") + "."; return; }
+  if (!v("j-vorname")) fehler.push(t("Vorname"));
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fehler.push(t("gültige E-Mail"));
+  if (!stile.length) fehler.push(t("mindestens ein Stil-Bild"));
+  if ($("j-vermieten").checked && !rentFiles.length) fehler.push(t("Fotos der Teile zum Vermieten"));
+  if (!$("j-ok").checked) fehler.push(t("Zustimmung zu den Bedingungen"));
+  if (fehler.length) { err.textContent = t("Bitte noch ergänzen: {x}.", { x: fehler.join(", ") }); return; }
   btn.disabled = true; btn.textContent = "Wird gesendet …";
   try {
     const folder = uuid(), fotos = [];
     if ($("j-vermieten").checked) {
       for (let i = 0; i < rentFiles.length; i++) {
-        btn.textContent = `Foto ${i + 1} von ${rentFiles.length} wird hochgeladen …`;
+        btn.textContent = t("Foto {i} von {n} wird hochgeladen …", { i: i + 1, n: rentFiles.length });
         const blob = await resizeImage(rentFiles[i]), path = `${folder}/${i + 1}.jpg`;
         const { error } = await sb.storage.from("anmeldungen").upload(path, blob, { contentType: "image/jpeg", upsert: false });
         if (error) throw error;
@@ -525,7 +525,7 @@ async function submitJoin() {
     window.scrollTo(0, 0);
   } catch (e) {
     const m = (e && e.message) || String(e);
-    err.textContent = /Failed to fetch|NetworkError|Load failed/i.test(m) ? "Keine Verbindung. Prüfe das Internet und versuch es nochmals." : "Das hat nicht geklappt: " + m;
+    err.textContent = /Failed to fetch|NetworkError|Load failed/i.test(m) ? "Keine Verbindung. Prüfe das Internet und versuch es nochmals." : t("Das hat nicht geklappt: {m}", { m: m });
     btn.disabled = false; btn.textContent = "Anmeldung senden";
   }
 }

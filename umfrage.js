@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · UMFRAGE
+   SECONDHAND AMONG FRIENDS · UMFRAGE
    Ablauf: Intro → 10 Fragen → leerer Kleiderschrank (Swipe)
            → Was fehlt dir? → Kaufwunsch (Anfrage) → Gutschein
    Ohne Login. Liest Stücke über umfrage_liste(), schickt die
@@ -10,8 +10,8 @@
 /* ---------- Einstellungen: hier anpassen ---------- */
 const KAUF_AKTIV = true;          // false = keine Kaufanfragen am Schluss (z.B. bis die Owner zugestimmt haben)
 const MIN_SWIPES = 10;            // ab so vielen Teilen darf man vorzeitig aufhören
-const GUTSCHEIN_CHF = 5;          // Gutschein für alle, nur auf Frankly-Teile
-const PREISE = ["0–20", "20–40", "40–60", "60–80", "80–100"];
+const GUTSCHEIN_CHF = 5;          // Gutschein für alle, nur auf Among-Friends-Teile
+const PREISE = ["0–20", "20–40", "40–60", "60–80", "80–100", "über 100"];
 
 const CFG = window.FRANKLY_CONFIG;
 const LANG = window.FRANKLY_LANG === "en" ? "en" : "de";
@@ -27,10 +27,10 @@ const T = {
     h1: "Dein Kleiderschrank.<br><span>Von 0 auf.</span>",
     lead: "Drei Wochen lang hatten wir unseren Secondhand-Pop-up. Jetzt ziehen wir um und machen weiter. Damit wir das Sortiment genau für dich vorbereiten können und du am meisten davon hast, machen wir diese kleine Umfrage.",
     winH: "Dein Win",
-    win: [`<b>CHF ${GUTSCHEIN_CHF} Gutschein</b> auf alle Frankly-Teile, direkt am Schluss.`, "<b>Verlosung:</b> 1 Jahr Mitgliedschaft «Frankly Friends» (Wert CHF 120).", "Ein Sortiment, das zu dir passt."],
+    win: [`<b>CHF ${GUTSCHEIN_CHF} Gutschein</b> auf alle Among-Friends-Teile, direkt am Schluss.`, "<b>Verlosung:</b> 1 Jahr Mitgliedschaft «Among Friends Club» (Wert CHF 120).", "Ein Sortiment, das zu dir passt."],
     how: [["1", "10 kurze Fragen zu dir und deinem Stil."], ["2", "Swipe dich durch unsere Teile: rechts = will ich, links = nein danke."], ["3", "Rework: Wie sollen alte Teile neu aussehen?"], ["4", "Am Schluss: Was fehlt dir noch?"]],
     dauer: "Dauer: ca. 6 Minuten. Du kannst jederzeit aufhören.",
-    rwKick: "Frankly Rework",
+    rwKick: "Among Friends Rework",
     rwH: "Aus alt wird <span>neu.</span>",
     rwP: "Teile, die keiner mehr will, gestalten wir neu: kürzen, färben, kombinieren, verzieren. Jedes Stück bleibt ein Unikat. Was würdest du davon tragen?",
     rwSwipe: "Zuerst ein paar Ideen zum Swipen, danach 3 kurze Fragen.",
@@ -72,14 +72,14 @@ const T = {
     kaufP: "Kreuz an, was du gerne hättest. Das ist noch <b>kein Kauf</b>: Du schickst eine unverbindliche Anfrage. Wir fragen die Besitzerin und bringen euch zusammen. Den Rest macht ihr direkt untereinander.",
     keineLikes: "Du hast noch kein Teil nach rechts gewischt.",
     name: "Dein Name", kontakt: "E-Mail oder Handynummer",
-    kontaktNote: "Nur für Frankly. Wir geben deine Angaben nur an die Besitzerin weiter, wenn du ein Teil anfragst.",
-    verlosung: "Ich mache bei der Verlosung mit (1 Jahr Frankly Friends).",
+    kontaktNote: "Nur für Among Friends. Wir geben deine Angaben nur an die Besitzerin weiter, wenn du ein Teil anfragst.",
+    verlosung: "Ich mache bei der Verlosung mit (1 Jahr Among Friends Club).",
     senden: "Absenden und Gutschein holen", sende: "Wird gesendet …",
     errKontakt: "Für eine Anfrage oder die Verlosung brauchen wir deine E-Mail oder Handynummer.",
     errName: "Für eine Anfrage brauchen wir deinen Namen.",
     errSenden: "Das hat nicht geklappt. Bitte versuch es nochmals.",
     dankeH: "Danke!<br><span>Dein Gutschein.</span>",
-    dankeP: `CHF ${GUTSCHEIN_CHF} auf alle Frankly-Teile. Mach einen Screenshot und zeig den Code an der Kasse.`,
+    dankeP: `CHF ${GUTSCHEIN_CHF} auf alle Among-Friends-Teile. Mach einen Screenshot und zeig den Code an der Kasse.`,
     dankeAnfrage: "Deine Anfrage ist bei uns. Wir fragen die Besitzerin und melden uns bei dir.",
     dankeVerl: "Du bist bei der Verlosung dabei. Viel Glück!",
     folgen: "Wir melden auf Instagram, wo und wann es weitergeht.",
@@ -93,10 +93,10 @@ const T = {
     h1: "Your closet.<br><span>From 0.</span>",
     lead: "For three weeks we ran our second-hand pop-up. Now we're moving and carrying on. So we can prepare the right selection for you and you get the most out of it, we're doing this short survey.",
     winH: "Your win",
-    win: [`<b>CHF ${GUTSCHEIN_CHF} voucher</b> on all Frankly pieces, right at the end.`, "<b>Prize draw:</b> 1 year of «Frankly Friends» membership (worth CHF 120).", "A selection that fits you."],
+    win: [`<b>CHF ${GUTSCHEIN_CHF} voucher</b> on all Among Friends pieces, right at the end.`, "<b>Prize draw:</b> 1 year of «Among Friends Club» membership (worth CHF 120).", "A selection that fits you."],
     how: [["1", "10 short questions about you and your style."], ["2", "Swipe through our pieces: right = want it, left = no thanks."], ["3", "Rework: how should old pieces look new?"], ["4", "At the end: what's still missing?"]],
     dauer: "Takes about 6 minutes. You can stop at any time.",
-    rwKick: "Frankly Rework",
+    rwKick: "Among Friends Rework",
     rwH: "Old becomes <span>new.</span>",
     rwP: "Pieces nobody wants anymore, we redesign: cropping, dyeing, combining, embellishing. Every piece stays one of a kind. What would you wear?",
     rwSwipe: "First a few ideas to swipe, then 3 short questions.",
@@ -138,14 +138,14 @@ const T = {
     kaufP: "Tick what you'd like to have. This is <b>not a purchase</b> yet: you send a no-obligation request. We ask the owner and connect you. You arrange the rest directly with each other.",
     keineLikes: "You haven't swiped any piece to the right yet.",
     name: "Your name", kontakt: "Email or mobile number",
-    kontaktNote: "Only for Frankly. We only pass your details on to the owner if you request a piece.",
-    verlosung: "I'd like to join the prize draw (1 year of Frankly Friends).",
+    kontaktNote: "Only for Among Friends. We only pass your details on to the owner if you request a piece.",
+    verlosung: "I'd like to join the prize draw (1 year of Among Friends Club).",
     senden: "Send and get my voucher", sende: "Sending …",
     errKontakt: "For a request or the prize draw we need your email or mobile number.",
     errName: "For a request we need your name.",
     errSenden: "That didn't work. Please try again.",
     dankeH: "Thank you!<br><span>Your voucher.</span>",
-    dankeP: `CHF ${GUTSCHEIN_CHF} on all Frankly pieces. Take a screenshot and show the code at checkout.`,
+    dankeP: `CHF ${GUTSCHEIN_CHF} on all Among Friends pieces. Take a screenshot and show the code at checkout.`,
     dankeAnfrage: "We've got your request. We'll ask the owner and get back to you.",
     dankeVerl: "You're in the prize draw. Good luck!",
     folgen: "We'll announce on Instagram where and when we continue.",
@@ -517,7 +517,7 @@ function danke() {
 
 /* ---------- Start ---------- */
 $("tag").textContent = T.tag;
-if (LANG === "en") document.title = "0–100 Frankly · Survey";
+if (LANG === "en") document.title = "Secondhand among Friends · Survey";
 if (!window.supabase || !CFG) { app.innerHTML = `<p class="err">${T.errSenden}</p>`; }
 else {
   sb = window.supabase.createClient(CFG.url, CFG.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "frankly-umfrage" } });

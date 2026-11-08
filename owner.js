@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · OWNER-BEREICH ("Mein Frankly")
+   SECONDHAND AMONG FRIENDS · OWNER-BEREICH ("Meine Teile")
    Zugang über den persönlichen Link owner.html?k=<code>.
    Liest und entscheidet nur über die Funktionen owner_portal und
    owner_entscheid (siehe supabase/06_owner_bereich.sql).
@@ -13,7 +13,7 @@ const WD = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const STUFE = {
   Stange: "An der Stange",
   Reduziert: "An der Reduziert-Stange",
-  Upcycling: "Von Frankly upgecycelt, an der Upcycling-Stange. Wird es verkauft, bekommst du 20 %",
+  Upcycling: "Von Among Friends upgecycelt, an der Upcycling-Stange. Wird es verkauft, bekommst du 20 %",
   Lager: "Im Lager · online auf Anfrage",
   Online: "Online-Stange · bei dir zu Hause"
 };
@@ -22,7 +22,7 @@ const WAHL = {
   Reduziert: ["Online", "Upcycling", "Zurücknehmen", "Spenden"],
   Lager: ["Online", "Upcycling", "Zurücknehmen", "Spenden"]
 };
-const WAHL_TXT = { "Preis senken": "Preis senken", Upcycling: "Frankly upcycelt es (du bekommst 20 %)", Zurücknehmen: "Zurücknehmen", Lager: "Ins Lager", Online: "Abholen und online weiterverkaufen", Spenden: "Spenden" };
+const WAHL_TXT = { "Preis senken": "Preis senken", Upcycling: "Among Friends upcycelt es (du bekommst 20 %)", Zurücknehmen: "Zurücknehmen", Lager: "Ins Lager", Online: "Abholen und online weiterverkaufen", Spenden: "Spenden" };
 
 let sb = null, TOKEN = null, DATA = null, URLS = {}, open = {};
 
@@ -76,28 +76,28 @@ function posts() {
 }
 function stateLine(it) {
   const p = phaseState(it);
-  if (it.entscheid === "Upcycling" && it.status === "Entwurf") return `<b>Bei Frankly zum Upcyceln.</b> Daraus entsteht etwas Neues. Wird es verkauft, bekommst du 20 %.${it.entscheid_notiz ? ` Deine Idee: «${esc(it.entscheid_notiz)}»` : ""}`;
+  if (it.entscheid === "Upcycling" && it.status === "Entwurf") return t("<b>Bei Among Friends zum Upcyceln.</b> Daraus entsteht etwas Neues. Wird es verkauft, bekommst du 20 %.") + (it.entscheid_notiz ? t(" Deine Idee: «{i}»", { i: esc(it.entscheid_notiz) }) : "");
   if (it.status === "Entwurf") return `Wird gerade erfasst`;
   if (it.status === "Verkauft") {
     const b = it.verkauf_preis != null ? it.verkauf_preis : it.preis, a = round2(Number(b) * (100 - provOf(it)) / 100);
-    const pay = it.ausbezahlt_am ? `ausbezahlt am ${fmt(it.ausbezahlt_am)}` : `Auszahlung am ${fmt(payoutDate(it.verkauf_datum))}`;
-    return `<b>Verkauft</b>${it.verkauf_datum ? " am " + esc(fmt(it.verkauf_datum)) : ""} für ${esc(chf(b))} · dein Anteil <b>${esc(chf(a))}</b> · ${esc(pay)}`;
+    const pay = it.ausbezahlt_am ? t("ausbezahlt am {d}", { d: fmt(it.ausbezahlt_am) }) : t("Auszahlung am {d}", { d: fmt(payoutDate(it.verkauf_datum)) });
+    return t("<b>Verkauft</b>{am} für {b} · dein Anteil <b>{a}</b> · {pay}", { am: it.verkauf_datum ? t(" am {d}", { d: esc(fmt(it.verkauf_datum)) }) : "", b: esc(chf(b)), a: esc(chf(a)), pay: esc(pay) });
   }
   if (it.status === "Vermietet") {
     const r = DATA.mieten.filter(x => x.item_id === it.id && !x.zurueck_am).pop();
-    return `<b>Vermietet</b>${r && r.bis ? " bis " + esc(fmt(r.bis)) : ""}`;
+    return t("<b>Vermietet</b>{bis}", { bis: r && r.bis ? t(" bis {d}", { d: esc(fmt(r.bis)) }) : "" });
   }
-  if (it.status === "Reserviert") return `<b>Reserviert</b> für eine Kundin`;
+  if (it.status === "Reserviert") return t("<b>Reserviert</b> für eine Kundin");
   if (it.status === "Zurückgegeben") return `Zurück bei dir`;
   if (it.status === "Gespendet") return `Gespendet. Danke!`;
-  if (it.entscheid === "Zurücknehmen" && it.entscheid_notiz === "Online weiterverkaufen") return `<b>Abholung</b> am ${esc(fmt(it.entscheid_datum))}, danach auf der Online-Stange`;
-  if (it.entscheid === "Zurücknehmen") return `<b>Abholung</b> am ${esc(fmt(it.entscheid_datum))} im Laden`;
-  if (it.stufe === "Online") return `<b>Online-Stange:</b> Das Teil ist bei dir. Bitte bewahre es separat auf. Wird es gekauft, melden wir uns, und du verschickst es innert 3 Tagen.<br><button class="btn" type="button" data-online-ende="${esc(it.id)}">Nicht mehr verfügbar</button>`;
+  if (it.entscheid === "Zurücknehmen" && it.entscheid_notiz === "Online weiterverkaufen") return t("<b>Abholung</b> am {d}, danach auf der Online-Stange", { d: esc(fmt(it.entscheid_datum)) });
+  if (it.entscheid === "Zurücknehmen") return t("<b>Abholung</b> am {d} im Laden", { d: esc(fmt(it.entscheid_datum)) });
+  if (it.stufe === "Online") return `${t("<b>Online-Stange:</b> Das Teil ist bei dir. Bitte bewahre es separat auf. Wird es gekauft, melden wir uns, und du verschickst es innert 3 Tagen.")}<br><button class="btn" type="button" data-online-ende="${esc(it.id)}">Nicht mehr verfügbar</button>`;
   if (it.entscheid === "Spenden") return `<b>Wird gespendet</b>`;
   const s = STUFE[it.stufe] || "Im Laden";
   if (!p) return s;
-  if (p.state === "upcoming") return `${s} ab ${esc(fmt(p.start))}`;
-  if (p.state === "running") return `${s} bis ${esc(fmt(p.end))}`;
+  if (p.state === "upcoming") return t("{s} ab {d}", { s: t(s), d: esc(fmt(p.start)) });
+  if (p.state === "running") return t("{s} bis {d}", { s: t(s), d: esc(fmt(p.end)) });
   return `<span class="warn">Runde vorbei: Bitte entscheide, wie es weitergeht.</span>`;
 }
 function thumb(it) { const u = URLS[it.foto_pfad]; return u ? `<img src="${esc(u)}" alt="" loading="lazy">` : `<span class="nofoto">kein Foto</span>`; }
@@ -107,7 +107,7 @@ function row(it) {
     <article class="orow ${due ? "due" : ""} ${done ? "done" : ""}" id="row-${esc(it.id)}">
       <div class="othumb">${thumb(it)}</div>
       <div class="oinfo">
-        <span class="onr">${esc(it.nr)}${it.groesse ? " · Gr. " + esc(it.groesse) : ""}</span>
+        <span class="onr">${esc(it.nr)}${it.groesse ? " · " + t("Gr.") + " " + esc(it.groesse) : ""}</span>
         <span class="otitle">${esc(it.titel)}</span>
         ${it.status !== "Verkauft" && it.preis != null ? `<span class="oprice">${esc(chf(it.preis))}</span>` : ""}
         <span class="ostate">${stateLine(it)}</span>
@@ -128,22 +128,22 @@ function decideBox(it) {
       ${sel ? decideForm(it, sel) : ""}
     </div>`;
 }
-function nextRound(it) { const n = parseD(it.naechste_runde); return n ? `${MONTHS[n.getMonth()]} (${fmt(firstSat(n.getFullYear(), n.getMonth()))} bis ${fmt(lastSat(n.getFullYear(), n.getMonth()))})` : "die nächste Runde"; }
+function nextRound(it) { const n = parseD(it.naechste_runde); return n ? `${t(MONTHS[n.getMonth()])} (${t(fmt(firstSat(n.getFullYear(), n.getMonth())))} – ${t(fmt(lastSat(n.getFullYear(), n.getMonth())))})` : t("die nächste Runde"); }
 function decideForm(it, w) {
   const id = esc(it.id);
   let body = "";
   if (w === "Preis senken") body = `
-    <p class="dnote">Dein Teil hängt in ${esc(nextRound(it))} an der Reduziert-Stange. Bisher ${esc(chf(it.preis))}.</p>
-    <label>Neuer Preis CHF<input id="d-preis-${id}" inputmode="decimal" autocomplete="off" placeholder="z.B. ${esc(it.preis != null ? Math.max(0, Math.round(Number(it.preis) * 0.7)) : 20)}"></label>`;
+    <p class="dnote">${t("Dein Teil hängt in {r} an der Reduziert-Stange. Bisher {p}.", { r: esc(nextRound(it)), p: esc(chf(it.preis)) })}</p>
+    <label>Neuer Preis CHF<input id="d-preis-${id}" inputmode="decimal" autocomplete="off" placeholder="${t("z.B. {p}", { p: esc(it.preis != null ? Math.max(0, Math.round(Number(it.preis) * 0.7)) : 20) })}"></label>`;
   if (w === "Upcycling") body = `
-    <p class="dnote">Du gibst dein Teil an Frankly. Yesim macht daraus etwas Neues: ein ganz neues Stück, oder sie verändert es, z.B. kürzen oder einen anderen Schnitt. Das neue Teil hängt dann an der Upcycling-Stange. Wird es verkauft, bekommst du 20 % vom Preis, 80 % gehen an Frankly für Arbeit und Material.</p>
+    <p class="dnote">Du gibst dein Teil an Among Friends. Yesim macht daraus etwas Neues: ein ganz neues Stück, oder sie verändert es, z.B. kürzen oder einen anderen Schnitt. Das neue Teil hängt dann an der Upcycling-Stange. Wird es verkauft, bekommst du 20 % vom Preis, 80 % gehen an Among Friends für Arbeit und Material.</p>
     <label>Hast du eine Idee? (freiwillig)<textarea id="d-idee-${id}" rows="2" maxlength="300" placeholder="z.B. als Crop-Top, Ärmel ab, als Tasche …"></textarea></label>`;
   if (w === "Zurücknehmen") body = `
     <p class="dnote">Du holst dein Teil an einem Samstag im Laden ab.</p>
     <label>Abholung am<select id="d-tag-${id}">${satOptions()}</select></label>`;
-  if (w === "Lager") body = `<p class="dnote">Dein Teil kommt für ${esc(nextRound(it))} ins Lager. Im Online-Shop bleibt es sichtbar mit «Auf Anfrage». Wer es anprobieren möchte, meldet sich bei uns.</p>`;
+  if (w === "Lager") body = `<p class="dnote">${t("Dein Teil kommt für {r} ins Lager. Im Online-Shop bleibt es sichtbar mit «Auf Anfrage». Wer es anprobieren möchte, meldet sich bei uns.", { r: esc(nextRound(it)) })}</p>`;
   if (w === "Online") body = `
-    <p class="dnote">Du holst dein Teil an einem Samstag ab. Es bleibt aber im Online-Shop mit dem Hinweis «Versand durch Owner». Kaufanfragen kommen zu Frankly. Wir melden uns bei dir, du verschickst das Teil, und du bekommst 90 % wie bisher.</p>
+    <p class="dnote">Du holst dein Teil an einem Samstag ab. Es bleibt aber im Online-Shop mit dem Hinweis «Versand durch Owner». Kaufanfragen kommen zu Among Friends. Wir melden uns bei dir, du verschickst das Teil, und du bekommst 90 % wie bisher.</p>
     <label>Abholung am<select id="d-tag-${id}">${satOptions()}</select></label>
     <div class="radios"><label><input type="checkbox" id="d-ok-${id}"> Ich bewahre das Teil separat auf (nicht im eigenen Kleiderschrank), verschicke es innert 3 Tagen, wenn es gekauft wird, und melde hier, wenn ich es nicht mehr habe.</label></div>`;
   if (w === "Spenden") body = `<p class="dnote">Wir geben dein Teil an eine gemeinnützige Stelle in Zürich weiter. Das kannst du danach nicht mehr ändern.</p>`;
@@ -155,7 +155,7 @@ async function submitDecision(id, btn) {
   if (w === "Preis senken") {
     const p = parsePrice(($("d-preis-" + id) || {}).value);
     if (p == null) return toast("Bitte einen neuen Preis eingeben.");
-    if (it.preis != null && p >= Number(it.preis)) return toast("Der neue Preis muss tiefer sein als " + chf(it.preis) + ".");
+    if (it.preis != null && p >= Number(it.preis)) return toast(t("Der neue Preis muss tiefer sein als {p}.", { p: chf(it.preis) }));
     args.p_preis = p;
   }
   if (w === "Upcycling") {
@@ -168,7 +168,7 @@ async function submitDecision(id, btn) {
   }
   btn.disabled = true; btn.textContent = "Wird gespeichert …";
   const { data, error } = await sb.rpc("owner_entscheid", args);
-  if (error) { btn.disabled = false; btn.textContent = "Entscheid speichern"; return toast(niceErr(error), 5000); }
+  if (error) { btn.disabled = false; btn.textContent = t("Entscheid speichern"); return toast(t(niceErr(error)), 5000); }
   DATA = data; delete open[id];
   render();
   toast(w === "Preis senken" ? "Neuer Preis gespeichert" : "Entscheid gespeichert. Danke!");
@@ -186,15 +186,15 @@ function render() {
   $("main").innerHTML = `
     <div class="ohead">
       <span class="sub">${esc(o.id)}</span>
-      <h1 class="claim">Hallo ${esc(o.profilname)}</h1>
-      <p class="lead">Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf bekommst du ${esc(share)} %, von jeder Miete 70 %, von deinen upgecycelten Teilen 20 %.</p>
+      <h1 class="claim">${t("Hallo {name}", { name: esc(o.profilname) })}</h1>
+      <p class="lead">${t("Hier siehst du jederzeit, wie es deinen Teilen geht. Von jedem Verkauf bekommst du {s} %, von jeder Miete 70 %, von deinen upgecycelten Teilen 20 %.", { s: esc(share) })}</p>
     </div>
     <div class="okpis">
       <div class="okpi"><span class="klabel">Verdient bisher</span><span class="kval">${esc(chf(earned))}</span></div>
       <div class="okpi"><span class="klabel">Ausbezahlt</span><span class="kval">${esc(chf(paid))}</span></div>
-      <div class="okpi ${offen > 0 ? "strong" : ""}"><span class="klabel">Kommt noch</span><span class="kval">${esc(chf(offen))}</span>${offen > 0 && unpaid ? `<span class="hint">Auszahlung am ${esc(fmt(unpaid))}</span>` : ""}</div>
+      <div class="okpi ${offen > 0 ? "strong" : ""}"><span class="klabel">Kommt noch</span><span class="kval">${esc(chf(offen))}</span>${offen > 0 && unpaid ? `<span class="hint">${t("Auszahlung am {d}", { d: esc(fmt(unpaid)) })}</span>` : ""}</div>
     </div>
-    ${due.length ? `<h2 class="osec">Jetzt entscheiden <span class="count">${due.length} ${due.length === 1 ? "Teil" : "Teile"}</span></h2><div class="olist">${due.map(row).join("")}</div>` : ""}
+    ${due.length ? `<h2 class="osec">Jetzt entscheiden <span class="count">${t(due.length === 1 ? "{n} Teil" : "{n} Teile", { n: due.length })}</span></h2><div class="olist">${due.map(row).join("")}</div>` : ""}
     <h2 class="osec">Deine Teile im Laden <span class="count">${active.length}</span></h2>
     <div class="olist">${active.length ? active.map(row).join("") : `<p class="hint">Gerade sind keine Teile von dir im Laden.</p>`}</div>
     ${done.length ? `<h2 class="osec">Abgeschlossen <span class="count">${done.length}</span></h2><div class="olist">${done.map(row).join("")}</div>` : ""}
@@ -202,15 +202,15 @@ function render() {
       <span class="klabel">So läuft es</span>
       <ol>
         <li><b>Monat 1:</b> Dein Teil hängt zu deinem Preis an der Stange. Eine Runde geht vom ersten bis zum letzten Samstag im Monat.</li>
-        <li><b>Monat 2:</b> Ist es nicht verkauft, wählst du: Preis senken (Reduziert-Stange), Frankly upcycelt es, oder du nimmst es zurück.</li>
-        <li><b>Nach Monat 2:</b> Du holst es ab und verkaufst es auf der <b>Online-Stange</b> weiter (du verschickst es, wenn jemand es kauft), oder Frankly upcycelt es. Zurücknehmen oder spenden geht auch.</li>
-        <li><b>Upcycling:</b> Frankly macht aus deinem Teil etwas Neues. Wird es verkauft, bekommst du 20 %.</li>
+        <li><b>Monat 2:</b> Ist es nicht verkauft, wählst du: Preis senken (Reduziert-Stange), Among Friends upcycelt es, oder du nimmst es zurück.</li>
+        <li><b>Nach Monat 2:</b> Du holst es ab und verkaufst es auf der <b>Online-Stange</b> weiter (du verschickst es, wenn jemand es kauft), oder Among Friends upcycelt es. Zurücknehmen oder spenden geht auch.</li>
+        <li><b>Upcycling:</b> Among Friends macht aus deinem Teil etwas Neues. Wird es verkauft, bekommst du 20 %.</li>
       </ol>
       <p class="hint"><b>Testlauf:</b> Die ersten drei Monate sind ein Probelauf. Reduziert-Stange, Upcycling und Online-Stange können sich danach noch ändern. Wir informieren dich rechtzeitig.</p>
     </div>`;
 }
 function noLink(msg) {
-  $("main").innerHTML = `<div class="nolink"><h1 class="vtitle">Mein Frankly</h1><p class="lead">${esc(msg)}</p><p class="hint">Den persönlichen Link bekommst du von Frankly per E-Mail. Hast du ihn verloren? Frag im Laden nach einem neuen.</p></div>`;
+  $("main").innerHTML = `<div class="nolink"><h1 class="vtitle">Meine Teile</h1><p class="lead">${esc(msg)}</p><p class="hint">Den persönlichen Link bekommst du von Among Friends per E-Mail. Hast du ihn verloren? Frag im Laden nach einem neuen.</p></div>`;
 }
 
 /* ---------- Klicks ---------- */

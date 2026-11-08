@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · LAGER  (Version 2: Owner, Phasen, Verkauf, Miete)
+   SECONDHAND AMONG FRIENDS · LAGER  (Version 2: Owner, Phasen, Verkauf, Miete)
    Daten in Supabase: items, looks, look_items, owners, vermietungen,
    preis_verlauf · Fotos im privaten Speicher "fotos".
    ========================================================= */
@@ -7,13 +7,13 @@
 
 const CFG = window.FRANKLY_CONFIG;
 const BUCKET = CFG.bucket || "fotos";
-const SELF = "OWN-001"; // Frankly / eigene Teile: keine Provision, keine Abrechnung
+const SELF = "OWN-001"; // Among Friends / eigene Teile: keine Provision, keine Abrechnung
 const STATUSES = ["Entwurf", "Verfügbar", "Reserviert", "Verkauft", "Vermietet", "Zurückgegeben", "Gespendet"];
 const CLOSED = ["Verkauft", "Zurückgegeben", "Gespendet"];
 const STUFEN = ["Stange", "Reduziert", "Upcycling", "Lager", "Online"];
-const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Upcycling von Frankly · Owner 20 %", Lager: "Lager (alt), auf Anfrage", Online: "Online-Stange · bei der Owner, Versand" };
+const STUFE_TXT = { Stange: "Monat 1 · Stange", Reduziert: "Monat 2 · Reduziert-Stange", Upcycling: "Upcycling von Among Friends · Owner 20 %", Lager: "Lager (alt), auf Anfrage", Online: "Online-Stange · bei der Owner, Versand" };
 const ONLINE_NOTIZ = "Online weiterverkaufen";
-const UPC_PROV = 80; // Upcycling durch Frankly: 80 % Frankly, 20 % ursprüngliche Owner
+const UPC_PROV = 80; // Upcycling durch Among Friends: 80 % Among Friends, 20 % ursprüngliche Owner
 const IN_SHOP = ["Entwurf", "Verfügbar", "Reserviert", "Vermietet"];
 const STYLES = ["FIERCE", "EDGY", "DREAMY", "AGILE"];
 const BASE_CATS = ["Oberteile", "Tuniken", "Hosen", "Röcke", "Kleider", "Jacken", "Kimonos", "Schuhe", "Taschen", "Accessoires"];
@@ -56,7 +56,7 @@ function uuid() {
 function imgUrl(path) { return path ? URLS["thumbs/" + path] || URLS[path] || "" : ""; }
 function bigUrl(path) { return path ? URLS[path] || URLS["thumbs/" + path] || "" : ""; }
 function imgTag(path, alt, big) { const u = big ? bigUrl(path) : imgUrl(path); return u ? `<img src="${esc(u)}" alt="${esc(alt)}" loading="lazy" decoding="async">` : `<span class="nofoto">Foto fehlt</span>`; }
-const RENT_PROV = 30; // Anteil Frankly bei Vermietungen (Owner erhält 70 %)
+const RENT_PROV = 30; // Anteil Among Friends bei Vermietungen (Owner erhält 70 %)
 const SZ = window.FRANKLY_SIZES;
 function sizePreview(txt, kat) {
   if (!SZ) return "";
@@ -220,8 +220,8 @@ function ownerProv(id) { const o = ownerOf(id); return o ? Number(o.provision_pr
 function ownerOptions(sel) { return OWNERS.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? "selected" : ""}>${esc(o.profilname)} · ${esc(o.id)}</option>`).join(""); }
 function itemOwner(itemId) { const it = ITEMS.find(x => x.id === itemId); return it ? it.owner_id : null; }
 /* ---------- Geld: Verkäufe & Mieten ----------
-   Provision = Anteil Frankly (z.B. 10 %). Owner erhält den Rest (z.B. 90 %).
-   Bei eigenen Teilen (OWN-001) geht alles an Frankly. */
+   Provision = Anteil Among Friends (z.B. 10 %). Owner erhält den Rest (z.B. 90 %).
+   Bei eigenen Teilen (OWN-001) geht alles an Among Friends. */
 function saleAmount(i) { return i.verkauf_preis != null ? Number(i.verkauf_preis) : (i.preis != null ? Number(i.preis) : null); }
 function saleDate(i) { return i.verkauf_datum || (i.updated_at ? String(i.updated_at).slice(0, 10) : null); }
 function itemProv(i) { return i.owner_id === SELF ? 100 : (i.verkauf_provision != null ? Number(i.verkauf_provision) : ownerProv(i.owner_id)); }
@@ -257,7 +257,7 @@ function ownerStats(oid) {
     open: sum(posts.filter(p => !p.paid), "anteil")
   };
 }
-function splitLabel(o) { const p = Number(o.provision_prozent); return `${100 - p} % Owner · ${p} % Frankly`; }
+function splitLabel(o) { const p = Number(o.provision_prozent); return `${100 - p} % Owner · ${p} % Among Friends`; }
 
 /* ---------- Start & Anmeldung ---------- */
 function show(which) { $("boot").hidden = which !== "boot"; $("login").hidden = which !== "login"; $("app").hidden = which !== "app"; }
@@ -470,7 +470,7 @@ function renderNews() {
   const el = $("news"); if (!el) return;
   const open = ANFRAGEN.filter(a => !a.erledigt).sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
   const nRes = open.filter(isRes).length, nAnf = open.length - nRes;
-  document.title = (open.length ? `(${open.length}) ` : "") + "Frankly Lager";
+  document.title = (open.length ? `(${open.length}) ` : "") + "Among Friends Lager";
   if (!open.length) { el.innerHTML = ""; return; }
   const parts = [nRes ? `${nRes} ${nRes === 1 ? "Reservation" : "Reservationen"}` : "", nAnf ? `${nAnf} ${nAnf === 1 ? "Anfrage" : "Anfragen"}` : ""].filter(Boolean).join(" · ");
   const canAsk = "Notification" in window && Notification.permission === "default";
@@ -504,7 +504,7 @@ async function checkNew() {
     const a = fresh[0], t = ITEMS.find(x => x.id === a.item_id);
     const msg = `${isRes(a) ? "Neue Reservation" : "Neue Anfrage"}: ${t ? t.nr + " " + (t.titel || "") : ""} von ${a.name}`;
     toast(msg, 8000); beep();
-    try { if ("Notification" in window && Notification.permission === "granted") new Notification("0–100 Frankly", { body: msg + (fresh.length > 1 ? ` (+${fresh.length - 1})` : ""), icon: "icon-192.png" }); } catch (e) {}
+    try { if ("Notification" in window && Notification.permission === "granted") new Notification("Secondhand among Friends", { body: msg + (fresh.length > 1 ? ` (+${fresh.length - 1})` : ""), icon: "icon-192.png" }); } catch (e) {}
   }
   renderAll();
 }
@@ -518,7 +518,7 @@ function renderAll() {
   if (window.renderInsights && !$("viewInsights").hidden) renderInsights();
   if (window.renderFinanzen && $("viewFinanzen") && !$("viewFinanzen").hidden) renderFinanzen();
   const mt = missingThumbs().length;
-  $("foot").innerHTML = esc(`0–100 Frankly · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "") + (missingCuts().length ? ` · <button class="btn" type="button" id="cutBtn">${missingCuts().length} Teile in Looks freistellen</button>` : "");
+  $("foot").innerHTML = esc(`Secondhand among Friends · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "") + (missingCuts().length ? ` · <button class="btn" type="button" id="cutBtn">${missingCuts().length} Teile in Looks freistellen</button>` : "");
 }
 function setTab(t) {
   ["items", "looks", "owners", "anm", "finanzen", "insights", "fotoecke", "umfrage"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
@@ -583,8 +583,8 @@ function phaseBlock(it) {
     acts = `<button class="btn primary" type="button" data-act="done">${doneTxt}</button><button class="btn" type="button" data-act="undecide">Entscheid ändern</button>`;
   }
   if (p.state === "due" || p.state === "running") {
-    if (stufe === "Stange") acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Frankly upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
-    else acts = `<button class="btn" type="button" data-act="toonline">Abholen + online …</button><button class="btn" type="button" data-act="upcycle">Frankly upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
+    if (stufe === "Stange") acts = `<button class="btn" type="button" data-act="lower">Preis senken …</button><button class="btn" type="button" data-act="upcycle">Among Friends upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button>`;
+    else acts = `<button class="btn" type="button" data-act="toonline">Abholen + online …</button><button class="btn" type="button" data-act="upcycle">Among Friends upcycelt …</button><button class="btn" type="button" data-act="takeback">Zurücknehmen …</button><button class="btn" type="button" data-act="donate">Spenden</button>`;
   }
     return `<div class="box ${p.state === "due" ? "alert" : ""}"><div class="sec" style="margin:0 0 6px">Runde</div><p class="pline">${line}</p>${acts ? `<div class="rowsmall">${acts}</div>` : ""}</div>`;
 }
@@ -619,18 +619,18 @@ async function delExtraFoto(id, idx, btn) {
   if (f) await removePhoto(f.pfad).catch(() => {});
   ITEMS = ITEMS.map(x => x.id === id ? data : x); showItem(id);
 }
-/* Upcycling durch Frankly: Teil liegt auf dem Upcycling-Stapel */
+/* Upcycling durch Among Friends: Teil liegt auf dem Upcycling-Stapel */
 function upcBlock(it) {
   if (!(it.entscheid === "Upcycling" && it.status === "Entwurf")) return "";
   return `<div class="box alert"><div class="sec" style="margin:0 0 6px">Upcycling-Stapel</div>
-    <p class="pline">Dieses Teil upcycelst du. Das neue Teil gehört zu ${UPC_PROV} % Frankly, ${100 - UPC_PROV} % gehen an ${esc(ownerName(it.owner_id))}.${it.entscheid_notiz ? ` Idee der Owner: «${esc(it.entscheid_notiz)}»` : ""}</p>
+    <p class="pline">Dieses Teil upcycelst du. Das neue Teil gehört zu ${UPC_PROV} % Among Friends, ${100 - UPC_PROV} % gehen an ${esc(ownerName(it.owner_id))}.${it.entscheid_notiz ? ` Idee der Owner: «${esc(it.entscheid_notiz)}»` : ""}</p>
     <div class="rowsmall"><button class="btn primary" type="button" data-act="upcdone">Upcycling fertig …</button></div></div>`;
 }
 function onlineBlock(it) {
   if (it.stufe !== "Online" || it.status !== "Verfügbar") return "";
   const o = ownerOf(it.owner_id) || {};
   return `<div class="box"><div class="sec" style="margin:0 0 6px">Online-Stange</div>
-    <p class="pline">Das Teil ist bei <b>${esc(o.profilname || it.owner_id)}</b> zu Hause. Kommt eine Anfrage: Owner kontaktieren, Verfügbarkeit prüfen, Kundin zahlt per Twint an Frankly, Owner verschickt. Danach «Verkauft …» erfassen.</p>
+    <p class="pline">Das Teil ist bei <b>${esc(o.profilname || it.owner_id)}</b> zu Hause. Kommt eine Anfrage: Owner kontaktieren, Verfügbarkeit prüfen, Kundin zahlt per Twint an Among Friends, Owner verschickt. Danach «Verkauft …» erfassen.</p>
     <p class="hint">${esc([o.voller_name, o.email, o.telefon].filter(Boolean).join(" · ") || "Keine Kontaktdaten gespeichert")}</p>
     <div class="rowsmall"><button class="btn" type="button" data-act="setstatus" data-v="Zurückgegeben">Nicht mehr verfügbar</button></div></div>`;
 }
@@ -862,7 +862,7 @@ function openAction(kind, it) {
       <label>Datum<input id="a-datum" type="date" value="${iso(today())}"></label></div>
       ${self ? "" : `<p class="hint" id="a-info"></p>`}
       <div class="rowsmall"><button class="btn primary" type="submit">Als verkauft speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
-    const upd = () => { const i = $("a-info"); if (!i) return; const p = parsePrice($("a-preis").value); i.textContent = p == null ? "" : `An ${ownerName(it.owner_id)}: ${chf(share(p, prov))} (${100 - prov} %) · Frankly: ${chf(round2(p - share(p, prov)))} (${prov} %)`; };
+    const upd = () => { const i = $("a-info"); if (!i) return; const p = parsePrice($("a-preis").value); i.textContent = p == null ? "" : `An ${ownerName(it.owner_id)}: ${chf(share(p, prov))} (${100 - prov} %) · Among Friends: ${chf(round2(p - share(p, prov)))} (${prov} %)`; };
     $("a-preis").addEventListener("input", upd); $("a-datum").addEventListener("input", upd); upd();
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const p = parsePrice($("a-preis").value);
@@ -877,7 +877,7 @@ function openAction(kind, it) {
     actForm(`<div class="sec" style="margin:0">Vermietung erfassen</div>
       <div class="two"><label>Mietbetrag CHF<input id="a-betrag" inputmode="decimal"></label><label>Von<input id="a-von" type="date" value="${iso(today())}"></label></div>
       <label>Bis (geplante Rückgabe)<input id="a-bis" type="date"></label>
-      ${self ? "" : `<p class="hint">Die Miete wird ${100 - prov}/${prov} geteilt (Owner/Frankly) und am letzten Samstag des Monats ausbezahlt. Kaution nicht vergessen: Die Mieterin bringt das Teil gereinigt mit Quittung zurück.</p>`}
+      ${self ? "" : `<p class="hint">Die Miete wird ${100 - prov}/${prov} geteilt (Owner/Among Friends) und am letzten Samstag des Monats ausbezahlt. Kaution nicht vergessen: Die Mieterin bringt das Teil gereinigt mit Quittung zurück.</p>`}
       <div class="rowsmall"><button class="btn primary" type="submit">Vermietung speichern</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
       e.preventDefault(); const b = parsePrice($("a-betrag").value);
@@ -906,8 +906,8 @@ function openAction(kind, it) {
     };
   }
   if (kind === "upcycle") {
-    actForm(`<div class="sec" style="margin:0">Frankly upcycelt</div>
-      <p class="hint">Das Teil kommt aus dem Laden auf deinen Upcycling-Stapel. Wird das neue Teil verkauft: ${UPC_PROV} % Frankly, ${100 - UPC_PROV} % an die Owner.</p>
+    actForm(`<div class="sec" style="margin:0">Among Friends upcycelt</div>
+      <p class="hint">Das Teil kommt aus dem Laden auf deinen Upcycling-Stapel. Wird das neue Teil verkauft: ${UPC_PROV} % Among Friends, ${100 - UPC_PROV} % an die Owner.</p>
       <label>Idee der Owner (freiwillig)<input id="a-notiz" maxlength="300" placeholder="z.B. als Crop-Top"></label>
       <div class="rowsmall"><button class="btn primary" type="submit">Auf den Upcycling-Stapel</button><button class="btn ghost" type="button" data-act="cancel">Abbrechen</button></div>`);
     $("actForm").onsubmit = async e => {
@@ -991,7 +991,7 @@ async function runAct(kind, btn) {
 /* ---------- Owner ---------- */
 function postTable(posts, cols) {
   if (!posts.length) return `<p class="hint">Noch keine Verkäufe oder Mieten.</p>`;
-  const head = { datum: "Datum", teil: "Teil", owner: "Owner", art: "Art", betrag: "Betrag", anteil: "An Owner", frankly: "Frankly", status: "Status" };
+  const head = { datum: "Datum", teil: "Teil", owner: "Owner", art: "Art", betrag: "Betrag", anteil: "An Owner", frankly: "Among Friends", status: "Status" };
   const cell = (p, c) => {
     if (c === "datum") return esc(p.datum ? fmt(p.datum).slice(3) : "–");
     if (c === "teil") return `<button class="linkbtn" type="button" data-item="${esc(p.itemId)}">${esc(p.nr || "")}</button> ${esc(p.titel || "")}${p.missingPrice ? ` <span class="hint">(Listenpreis)</span>` : ""}`;
@@ -1005,7 +1005,7 @@ function postTable(posts, cols) {
   return `<div class="tablewrap"><table class="tbl"><thead><tr>${cols.map(c => `<th>${head[c]}</th>`).join("")}</tr></thead>
     <tbody>${posts.map(p => `<tr>${cols.map(c => `<td>${cell(p, c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
-/* Einnahmen Frankly: eigene Verkäufe (100 %) + Provisionen von Owners */
+/* Einnahmen Among Friends: eigene Verkäufe (100 %) + Provisionen von Owners */
 let fPeriod = "month";
 function inPeriod(p, period) {
   if (period === "all") return true;
@@ -1030,10 +1030,10 @@ function franklyBlock() {
     <div class="kpis">
       <div class="kpi"><span class="klabel">Eigene Teile · 100 %</span><span class="kval">${esc(chf(t.ownSum))}</span><span class="hint">${t.own.length} Verkäufe/Mieten</span></div>
       <div class="kpi"><span class="klabel">Provision von Owners</span><span class="kval">${esc(chf(t.provSum))}</span><span class="hint">${t.prov.length} Verkäufe/Mieten</span></div>
-      <div class="kpi strong"><span class="klabel">Total Frankly</span><span class="kval">${esc(chf(t.total))}</span><span class="hint">An Owners noch offen: ${esc(chf(t.owed))}</span></div>
+      <div class="kpi strong"><span class="klabel">Total Among Friends</span><span class="kval">${esc(chf(t.total))}</span><span class="hint">An Owners noch offen: ${esc(chf(t.owed))}</span></div>
     </div>
     <div class="sec">Provision nach Owner</div>
-    ${rows ? `<div class="tablewrap"><table class="tbl"><thead><tr><th>Owner</th><th>Anzahl</th><th>Umsatz</th><th>Frankly</th><th>An Owner offen</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="hint">In diesem Zeitraum noch keine Verkäufe von Owners.</p>`}
+    ${rows ? `<div class="tablewrap"><table class="tbl"><thead><tr><th>Owner</th><th>Anzahl</th><th>Umsatz</th><th>Among Friends</th><th>An Owner offen</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="hint">In diesem Zeitraum noch keine Verkäufe von Owners.</p>`}
     <div class="sec">Detail Provisionen</div>
     ${postTable(t.prov, ["datum", "teil", "owner", "art", "betrag", "frankly", "anteil"])}
     <div class="sec">Detail eigene Verkäufe & Mieten</div>
@@ -1049,7 +1049,7 @@ function showOwner(oid) {
     <h2 class="dt">${esc(o.profilname)}</h2>
     <p class="desc">${esc(o.stil || "")}</p>
     <div class="ostats lg"><span><b>${s.total}</b> Teile</span><span><b>${s.shop}</b> im Laden</span><span><b>${s.sold}</b> verkauft</span>${s.due ? `<span class="warn"><b>${s.due}</b> Entscheid fällig</span>` : ""}</div>
-    ${self ? `<div class="box"><div class="sec" style="margin:0 0 8px">Einnahmen Frankly</div><div id="fblock">${franklyBlock()}</div></div>` : `
+    ${self ? `<div class="box"><div class="sec" style="margin:0 0 8px">Einnahmen Among Friends</div><div id="fblock">${franklyBlock()}</div></div>` : `
     <div class="box ${s.open > 0 ? "alert" : ""}">
       <div class="sec" style="margin:0 0 8px">Abrechnung · ${esc(splitLabel(o))}</div>
       <div class="kpis">
@@ -1080,8 +1080,8 @@ function showOwner(oid) {
 function ownerLink(o) { return o && o.zugang_token ? new URL("owner.html?k=" + o.zugang_token, location.href).toString() : ""; }
 function linkBox(o) {
   const url = ownerLink(o);
-  if (!url) return `<div class="box"><div class="sec" style="margin:0 0 6px">Mein Frankly</div><p class="hint">Für den persönlichen Link bitte zuerst 06_owner_bereich.sql in Supabase ausführen.</p></div>`;
-  return `<div class="box"><div class="sec" style="margin:0 0 6px">Mein Frankly · persönlicher Link</div>
+  if (!url) return `<div class="box"><div class="sec" style="margin:0 0 6px">Meine Teile</div><p class="hint">Für den persönlichen Link bitte zuerst 06_owner_bereich.sql in Supabase ausführen.</p></div>`;
+  return `<div class="box"><div class="sec" style="margin:0 0 6px">Meine Teile · persönlicher Link</div>
     <p class="hint">Mit diesem Link sieht ${esc(o.profilname)} ihre Teile, ihr Guthaben und entscheidet nach jeder Runde selbst. Kein Passwort nötig, darum nur ihr schicken.</p>
     <input class="search linkfield" id="olink" readonly value="${esc(url)}" aria-label="Persönlicher Link">
     <div class="rowsmall"><button class="btn primary" type="button" data-olink="${esc(o.id)}">Link kopieren</button><button class="btn" type="button" data-omail="${esc(o.id)}">Per E-Mail senden</button><button class="btn ghost" type="button" data-otoken="${esc(o.id)}">Neuen Link erstellen</button></div></div>`;
@@ -1089,7 +1089,7 @@ function linkBox(o) {
 function ownerMail(o) {
   if (!o.email) return toast("Für diese Person ist keine E-Mail gespeichert. Link kopieren und z.B. per WhatsApp schicken.", 5000);
   const name = (o.voller_name || o.profilname || "").split(" ")[0];
-  mailTo(o.email, "Dein persönlicher Link: Mein Frankly", `Hallo ${name}\n\nhier ist dein persönlicher Link zu «Mein Frankly»:\n${ownerLink(o)}\n\nDort siehst du jederzeit, wie es deinen Teilen geht, was du verdient hast und wann ausbezahlt wird. Nach jeder Runde kannst du dort selbst entscheiden, wie es weitergeht.\n\nBitte gib den Link nicht weiter, er ist nur für dich.` + GRUSS);
+  mailTo(o.email, "Dein persönlicher Link: Meine Teile", `Hallo ${name}\n\nhier ist dein persönlicher Link zu «Meine Teile»:\n${ownerLink(o)}\n\nDort siehst du jederzeit, wie es deinen Teilen geht, was du verdient hast und wann ausbezahlt wird. Nach jeder Runde kannst du dort selbst entscheiden, wie es weitergeht.\n\nBitte gib den Link nicht weiter, er ist nur für dich.` + GRUSS);
 }
 async function newToken(oid, btn) {
   if (!confirmTap(btn, "tok" + oid, "Alter Link funktioniert dann nicht mehr. Nochmals tippen")) return;
@@ -1120,9 +1120,9 @@ function ownerForm(o) {
       <div class="sec" style="margin:8px 0 0">Intern · nie öffentlich</div>
       <label>Voller Name<input id="o-voller_name" value="${esc(o.voller_name || "")}"></label>
       <div class="two"><label>E-Mail<input id="o-email" type="email" value="${esc(o.email || "")}"></label><label>Telefon<input id="o-telefon" type="tel" value="${esc(o.telefon || "")}"></label></div>
-      <div class="two"><label>Anteil Frankly %<input id="o-provision_prozent" inputmode="decimal" value="${esc(o.provision_prozent ?? 10)}"></label><label>Vereinbarung vom<input id="o-vereinbarung_datum" type="date" value="${esc(o.vereinbarung_datum || "")}"></label></div>
+      <div class="two"><label>Anteil Among Friends %<input id="o-provision_prozent" inputmode="decimal" value="${esc(o.provision_prozent ?? 10)}"></label><label>Vereinbarung vom<input id="o-vereinbarung_datum" type="date" value="${esc(o.vereinbarung_datum || "")}"></label></div>
       <label>Notiz<textarea id="o-notiz" rows="2">${esc(o.notiz || "")}</textarea></label>
-      <p class="hint">Anteil Frankly = deine Provision. Bei 10 % erhält die Owner 90 % jedes Verkaufs und jeder Miete. Bankdaten (IBAN) bitte nicht hier speichern, sondern im E-Banking.</p>
+      <p class="hint">Anteil Among Friends = deine Provision. Bei 10 % erhält die Owner 90 % jedes Verkaufs und jeder Miete. Bankdaten (IBAN) bitte nicht hier speichern, sondern im E-Banking.</p>
       <div class="row" style="margin-top:0"><button class="btn primary" type="submit">${isNew ? "Owner anlegen" : "Speichern"}</button></div>
     </form>`, { type: "ownerform", id: o.id });
   $("ownerForm").addEventListener("submit", async e => {
@@ -1263,7 +1263,7 @@ function mailTo(to, subject, body) {
   const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   window.location.href = href;
 }
-const GRUSS = "\n\nLiebe Grüsse\nYesim · 0–100 Frankly";
+const GRUSS = "\n\nLiebe Grüsse\nYesim · Secondhand among Friends";
 const RENT_YES = "Auch deine Vermiet-Teile nehmen wir gerne auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.";
 const RENT_NO = "Deine Vermiet-Teile passen diesmal leider nicht in unser Vermiet-Angebot.";
 /* rent: true = Vermieten zugesagt, false = abgesagt, null = nichts dazu schreiben */
@@ -1272,12 +1272,12 @@ function anmMail(kind, a, monat, text, rent, rentText) {
   const rentPart = rent === true ? RENT_YES + (rentText ? " " + rentText : "") + "\n\n" : rent === false ? RENT_NO + (rentText ? " " + rentText : "") + "\n\n" : "";
   if (kind === "accept") {
     const m = parseD(monat), fs = firstSat(m.getFullYear(), m.getMonth()), ls = lastSat(m.getFullYear(), m.getMonth());
-    return ["Du bist dabei bei 0–100 Frankly", hi + `schön, dass du mitmachst! Du bist für ${monthLabel(monat)} dabei. Die Runde läuft vom ${fmt(fs)} bis ${fmt(ls)}.\n\nBitte bring deine Teile (maximal 10${rent === true ? ", plus deine Vermiet-Teile" : ""}) vor Rundenbeginn vorbei:\n${SHOP_ADR}\n\n` + rentPart + (text ? text + "\n\n" : "") + `Von jedem Verkauf bekommst du 90 %, ausbezahlt am Ende der Runde.` + GRUSS];
+    return ["Du bist dabei bei Secondhand among Friends", hi + `schön, dass du mitmachst! Du bist für ${monthLabel(monat)} dabei. Die Runde läuft vom ${fmt(fs)} bis ${fmt(ls)}.\n\nBitte bring deine Teile (maximal 10${rent === true ? ", plus deine Vermiet-Teile" : ""}) vor Rundenbeginn vorbei:\n${SHOP_ADR}\n\n` + rentPart + (text ? text + "\n\n" : "") + `Von jedem Verkauf bekommst du 90 %, ausbezahlt am Ende der Runde.` + GRUSS];
   }
-  if (kind === "wait") return ["Deine Anmeldung bei 0–100 Frankly", hi + `danke für deine Anmeldung bei 0–100 Frankly! ${monat ? `Für ${monthLabel(monat)} sind wir leider schon voll. ` : ""}Wir haben dich auf die Warteliste gesetzt und melden uns, sobald ein Platz frei wird.\n\n` + rentPart + (text || "") + GRUSS];
-  if (kind === "reject") return ["Deine Anmeldung bei 0–100 Frankly", hi + `vielen Dank für dein Interesse an 0–100 Frankly und für deine Anmeldung. Leider können wir dich diesmal nicht aufnehmen${a.vermieten ? ", auch nicht mit den Vermiet-Teilen" : ""}.\n\n` + (text || "") + GRUSS];
-  if (kind === "rent-yes") return ["Vermieten bei 0–100 Frankly: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.\n\n` + (text || "") + GRUSS];
-  if (kind === "rent-no") return ["Vermieten bei 0–100 Frankly", hi + `danke für deine Fotos! Leider passen deine Teile diesmal nicht in unser Vermiet-Angebot.\n\n` + (text || "") + GRUSS];
+  if (kind === "wait") return ["Deine Anmeldung bei Secondhand among Friends", hi + `danke für deine Anmeldung bei Secondhand among Friends! ${monat ? `Für ${monthLabel(monat)} sind wir leider schon voll. ` : ""}Wir haben dich auf die Warteliste gesetzt und melden uns, sobald ein Platz frei wird.\n\n` + rentPart + (text || "") + GRUSS];
+  if (kind === "reject") return ["Deine Anmeldung bei Secondhand among Friends", hi + `vielen Dank für dein Interesse an Secondhand among Friends und für deine Anmeldung. Leider können wir dich diesmal nicht aufnehmen${a.vermieten ? ", auch nicht mit den Vermiet-Teilen" : ""}.\n\n` + (text || "") + GRUSS];
+  if (kind === "rent-yes") return ["Vermieten bei Secondhand among Friends: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.\n\n` + (text || "") + GRUSS];
+  if (kind === "rent-no") return ["Vermieten bei Secondhand among Friends", hi + `danke für deine Fotos! Leider passen deine Teile diesmal nicht in unser Vermiet-Angebot.\n\n` + (text || "") + GRUSS];
 }
 async function patchAnm(id, patch, msg) {
   const r = await sb.from("anmeldungen").update(Object.assign({ bearbeitet_am: new Date().toISOString() }, patch)).eq("id", id).select().single();

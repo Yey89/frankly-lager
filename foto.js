@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · Fotoecke: Foto hochladen (QR-Code am Stativ)
+   SECONDHAND AMONG FRIENDS · Fotoecke: Foto hochladen (QR-Code am Stativ)
    Ohne Login. Darf nur Fotos hochladen und einen Eintrag einfügen
    (siehe supabase/10_fotos_fotoecke.sql). Lesen kann nur das Team.
    ========================================================= */
@@ -80,7 +80,7 @@ $("fForm").addEventListener("submit", async e => {
   const err = $("fErr"), btn = $("fBtn"); err.textContent = "";
   if ($("fWeb").value) return;
   if (!file) { err.textContent = "Bitte zuerst ein Foto wählen."; return; }
-  if (!$("fIntern").checked) { err.textContent = "Bitte bestätige, dass Frankly das Foto intern anschauen darf."; return; }
+  if (!$("fIntern").checked) { err.textContent = "Bitte bestätige, dass Among Friends das Foto intern anschauen darf."; return; }
   if (!sb) { err.textContent = "Die Seite konnte nicht geladen werden. Bitte neu laden."; return; }
   btn.disabled = true; btn.textContent = "Wird gesendet …";
   try {

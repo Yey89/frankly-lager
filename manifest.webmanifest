@@ -1,6 +1,6 @@
 {
-  "name": "0–100 Frankly Lager",
-  "short_name": "Frankly Lager",
+  "name": "Secondhand among Friends · Lager",
+  "short_name": "Among Friends Lager",
   "start_url": "./lager.html",
   "scope": "./",
   "display": "standalone",

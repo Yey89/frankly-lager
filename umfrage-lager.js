@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · LAGER · Tab «Umfrage»
+   SECONDHAND AMONG FRIENDS · LAGER · Tab «Umfrage»
    Eigene Stücke für die Umfrage (Videos oder Fotos), unabhängig
    von den Lager-Teilen. Hier: hochladen, benennen, ein-/ausblenden,
    Resultate ansehen, Kaufanfragen, Verlosung, Gutscheine.
@@ -213,7 +213,7 @@ async function redeemU(btn) {
   busy(btn, false);
   if (u.error) return toast(nice(u.error), 4500);
   UANT = UANT.map(x => x.id === data.id ? u.data : x); $("uCode").value = "";
-  toast("Gutschein eingelöst: CHF 5 auf Frankly-Teile.", 6000);
+  toast("Gutschein eingelöst: CHF 5 auf Among-Friends-Teile.", 6000);
 }
 
 /* ---------- Klicks und Eingaben ---------- */

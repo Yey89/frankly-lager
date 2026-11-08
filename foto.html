@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Teile deinen Look · 0–100 Frankly</title>
+<title>Teile deinen Look · Secondhand among Friends</title>
 <meta name="theme-color" content="#111110">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="style.css?v=19">
-<link rel="stylesheet" href="shop.css?v=19">
+<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="shop.css?v=21">
 <style>
 .fpage{max-width:560px;padding-block:20px 40px;display:grid;gap:16px}
 .fpick{border:2px dashed var(--ink);background:var(--surface);aspect-ratio:3/4;max-height:56vh;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;overflow:hidden;position:relative}
@@ -29,7 +29,7 @@
 <body class="shop">
 <header class="stop">
   <div class="wrap stop-in">
-    <a class="mark" href="./">0–100 <b>Frankly</b></a>
+    <a class="mark" href="./">Secondhand <i>among</i> <b>Friends</b></a>
     <span class="sub">Fotoecke</span>
   </div>
 </header>
@@ -44,7 +44,7 @@
       <label>Instagram (freiwillig)<input id="fIg" maxlength="60" placeholder="@name"></label>
     </div>
     <div class="field">
-      <span class="flabel">Welche Teile von Frankly trägst du? <span class="hint">Antippen, freiwillig</span></span>
+      <span class="flabel">Welche Teile von Among Friends trägst du? <span class="hint">Antippen, freiwillig</span></span>
       <input class="search" id="fSearch" type="search" placeholder="Suchen: Jacke, schwarz, FR-000123 …" aria-label="Teile suchen">
       <div class="fitems" id="fItems"><p class="hint">Teile werden geladen …</p></div>
       <p class="hint" id="fChosen"></p>
@@ -53,8 +53,8 @@
       <textarea id="fGedanke" rows="3" maxlength="280" placeholder="z.B. Heute fühle ich mich mutig. Diese Farbe hätte ich früher nie getragen."></textarea>
       <span class="hint" id="fGedankeN">0 / 280</span></label>
     <label>Deine E-Mail für den Gutschein (freiwillig)<input id="fMail" type="email" maxlength="160" autocomplete="email" placeholder="Wir schicken dir den Code auch per E-Mail"></label>
-    <label class="check"><input id="fIntern" type="checkbox" checked> Frankly darf das Foto intern anschauen und auswerten (welche Teile zusammen getragen werden). *</label>
-    <label class="check"><input id="fPublic" type="checkbox"> Frankly darf das Foto auch auf Instagram und der Website zeigen, mit meinem Vornamen oder Instagram-Namen und meinem Gedanken, falls angegeben.</label>
+    <label class="check"><input id="fIntern" type="checkbox" checked> Among Friends darf das Foto intern anschauen und auswerten (welche Teile zusammen getragen werden). *</label>
+    <label class="check"><input id="fPublic" type="checkbox"> Among Friends darf das Foto auch auf Instagram und der Website zeigen, mit meinem Vornamen oder Instagram-Namen und meinem Gedanken, falls angegeben.</label>
     <p class="hint">Sind andere Personen auf dem Foto, frag sie bitte vorher. Du kannst deine Zustimmung jederzeit im Laden zurückziehen.</p>
     <label class="hp" aria-hidden="true">Website<input id="fWeb" tabindex="-1" autocomplete="off"></label>
     <p class="err" id="fErr" aria-live="polite"></p>
@@ -64,7 +64,7 @@
     <h1 class="vtitle" style="margin:0">Danke!</h1>
     <p class="lead">Dein Foto ist bei uns. Zeig diesen Code an der Kasse:</p>
     <div class="code" id="fCode"></div>
-    <p class="hint">CHF 5 auf alle Teile mit dem Etikett «Frankly-Teil». Ein Gutschein pro Besuch, nicht bar auszahlbar. Mach am besten einen Screenshot.</p>
+    <p class="hint">CHF 5 auf alle Teile mit dem Etikett «Among-Friends-Teil». Ein Gutschein pro Besuch, nicht bar auszahlbar. Mach am besten einen Screenshot.</p>
     <button class="btn" type="button" id="fAgain">Noch ein Foto senden</button>
   </div>
 </main>
@@ -73,7 +73,8 @@
 <script>
   if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
 </script>
-<script src="config.js?v=19"></script>
-<script src="foto.js?v=19"></script>
+<script src="i18n.js?v=21"></script>
+<script src="config.js?v=21"></script>
+<script src="foto.js?v=21"></script>
 </body>
 </html>

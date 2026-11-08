@@ -1,5 +1,5 @@
 /* =========================================================
-   0–100 FRANKLY · Grössen vereinheitlichen
+   SECONDHAND AMONG FRIENDS · Grössen vereinheitlichen
    Aus der Grösse, wie sie auf dem Etikett steht (z.B. "W28 L32", "38", "M", "36/38"),
    wird eine einheitliche Shop-Grösse XXS – 3XL (bei Schuhen die Zahl).
    Regeln:
