@@ -256,7 +256,7 @@ label.check input{width:auto;margin-top:3px}
 /* Finanzen */
 .finhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 12px}
 .finmonth{font-size:20px;min-width:9ch;text-align:center}
-.finsum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.finsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px}
 @media (max-width:700px){.finsum{grid-template-columns:1fr}}
 .finsum div{background:var(--surface);border:1px solid var(--line);padding:10px 12px;display:grid;gap:2px}
 .finsum b{font-size:24px;font-variant-numeric:tabular-nums}

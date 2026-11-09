@@ -821,6 +821,7 @@ async function saveEdit(id, btn) {
   }
   if (patch.status !== "Verkauft" && old.status === "Verkauft" && !old.ausbezahlt_am) {
     Object.assign(patch, { verkauf_preis: null, verkauf_datum: null, verkauf_provision: (patch.stufe || old.stufe) === "Upcycling" ? old.verkauf_provision : null });
+    if ("verkauf_club" in old) patch.verkauf_club = null;
   }
   busy(btn, true);
   const ok = await patchItem(id, patch, "Gespeichert");
@@ -869,7 +870,7 @@ function actForm(html) { const a = $("act"); if (a) { a.innerHTML = `<form class
 function satOptions() { return nextSaturdays(8).map(d => `<option value="${iso(d)}">${fmt(d)}</option>`).join(""); }
 
 function openAction(kind, it) {
-  const self = it.owner_id === SELF, prov = saleProv(it), club = !self && (it.stufe || "Stange") === "Stange";
+  const self = it.owner_id === SELF, prov = saleProv(it), club = (it.stufe || "Stange") === "Stange";
   if (kind === "sell") {
     actForm(`<div class="sec" style="margin:0">Verkauf erfassen</div>
       <div class="two"><label>Verkaufspreis CHF<input id="a-preis" inputmode="decimal" value="${esc(it.preis != null ? Number(it.preis) + (club ? CLUB_PLUS : 0) : "")}"></label>
@@ -887,7 +888,7 @@ function openAction(kind, it) {
       e.preventDefault(); const p = parsePrice($("a-preis").value);
       if (p == null) return toast("Bitte den Verkaufspreis eingeben.");
       const btn = e.submitter; busy(btn, true);
-      const ok = await patchItem(it.id, { status: "Verkauft", verkauf_preis: p, verkauf_datum: $("a-datum").value || iso(today()), verkauf_provision: provFor(p), ausbezahlt_am: null }, `${it.nr} verkauft`);
+      const ok = await patchItem(it.id, { status: "Verkauft", verkauf_preis: p, verkauf_datum: $("a-datum").value || iso(today()), verkauf_provision: self ? prov : provFor(p), ausbezahlt_am: null, ...(club && ITEMS.length && "verkauf_club" in ITEMS[0] ? { verkauf_club: !!($("a-club") && $("a-club").checked) } : {}) }, `${it.nr} verkauft`);
       busy(btn, false); if (ok) showItem(it.id);
     };
   }

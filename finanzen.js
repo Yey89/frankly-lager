@@ -7,21 +7,25 @@
    ========================================================= */
 "use strict";
 
-const FIN_ARTEN = ["Servicepauschale", "Workshop", "Create Together", "Basteltisch", "Anpassung", "Mitgliedschaft", "Zuschlag Nichtmitglieder", "Anderes"];
-/* Reihenfolge und Beschreibung der Zeilen. art = Name in «einnahmen» (von Hand) */
+/* Finanzplan nach Konzept v14 (November 2026) */
+const FIN_ARTEN = ["Owner-Pauschale", "Flick-it", "Mitgliedschaft", "Zuschlag Nichtmitglieder", "Workshop", "Create Together", "Basteltisch", "Anderes"];
+/* Reihenfolge und Beschreibung der Zeilen. art = Name in «einnahmen» (von Hand). pct = Anteil Among Friends für das Ziel */
 const FIN_QUELLEN = [
-  { q: "Verkauf Owner-Teile", auto: true, einheit: "Teile", txt: "Deine Provision auf verkaufte Owner-Teile" },
-  { q: "Among-Friends-Teile", auto: true, einheit: "Teile", txt: "Deine eigenen Teile, 100 % für dich" },
-  { q: "Vermietung", auto: true, einheit: "Vermietungen", txt: "Dein Anteil an der Miete" },
-  { q: "Servicepauschale", art: "Servicepauschale", einheit: "Owner", txt: "pro Owner bei der Abgabe" },
+  { q: "Owner-Pauschale", art: "Owner-Pauschale", einheit: "Owner", txt: "CHF 30 pro Owner bei der Abgabe" },
+  { q: "Hauptstange", auto: true, pct: 20, einheit: "Teile", txt: "Owner-Teile ab CHF 30, dein Anteil 20 %" },
+  { q: "Reduziert-Stange", auto: true, pct: 10, einheit: "Teile", txt: "Owner-Teile CHF 10–20, dein Anteil 10 %" },
+  { q: "Upcycling", auto: true, pct: 80, einheit: "Teile", txt: "upgecycelte Owner-Teile, dein Anteil 70–90 %" },
+  { q: "Among-Friends-Teile", auto: true, einheit: "Teile", txt: "eigene Teile und gute Teile aus dem Josy, 100 % für dich" },
+  { q: "Vermietung", auto: true, pct: 40, einheit: "Vermietungen", txt: "ab Februar, dein Anteil 40 %" },
+  { q: "Mitgliedschaft", art: "Mitgliedschaft", einheit: "Mitglieder", txt: "Among Friends Club, Ø pro Monat" },
+  { q: "Zuschlag Nichtmitglieder", auto: true, art: "Zuschlag Nichtmitglieder", einheit: "Teile", txt: "CHF 10 pro Teil der Hauptstange, kommt automatisch vom Verkauf" },
+  { q: "Flick-it", art: "Flick-it", einheit: "Aufträge", txt: "Reparaturen und Anpassungen" },
   { q: "Workshop", art: "Workshop", einheit: "Personen", txt: "Teilnehmende im Monat" },
   { q: "Create Together", art: "Create Together", einheit: "Termine", txt: "Begleitung bei eigenen Ideen" },
   { q: "Basteltisch", art: "Basteltisch", einheit: "Besuche", txt: "Platz und Material" },
-  { q: "Anpassung", art: "Anpassung", einheit: "Aufträge", txt: "Kürzen, enger machen" },
-  { q: "Mitgliedschaft", art: "Mitgliedschaft", einheit: "Mitglieder", txt: "Among Friends Club, Beitrag pro Monat" },
-  { q: "Zuschlag Nichtmitglieder", art: "Zuschlag Nichtmitglieder", einheit: "Teile", txt: "Zuschlag pro Teil für Nichtmitglieder" },
   { q: "Anderes", art: "Anderes", einheit: "", txt: "alles andere" }
 ];
+const FIN_PLUS = 10; // Zuschlag Nichtmitglieder an der Hauptstange
 let FIN_E = [], FIN_Z = {}, finState = "idle", finMonat = null, finEdit = false;
 
 function finMonthKey(d) { return String(d).slice(0, 7); }
@@ -49,27 +53,40 @@ async function loadFin() {
 function finIst(k) {
   const ist = {};
   const sold = ITEMS.filter(i => i.status === "Verkauft" && i.verkauf_datum && finMonthKey(i.verkauf_datum) === k);
-  const own = sold.filter(i => i.owner_id !== SELF), self = sold.filter(i => i.owner_id === SELF);
-  ist["Verkauf Owner-Teile"] = { n: own.length, chf: own.reduce((s, i) => { const p = i.verkauf_provision != null ? Number(i.verkauf_provision) : ownerProv(i.owner_id); return s + (saleAmount(i) || 0) * p / 100; }, 0), umsatz: own.reduce((s, i) => s + (saleAmount(i) || 0), 0) };
-  ist["Among-Friends-Teile"] = { n: self.length, chf: self.reduce((s, i) => s + (saleAmount(i) || 0), 0) };
+  /* Zuschlag: Teil der Hauptstange, beim Verkauf «kein Club-Mitglied» */
+  const plus = i => i.verkauf_club === false ? Math.min(FIN_PLUS, saleAmount(i) || 0) : 0;
+  const afShare = i => { const p = i.verkauf_provision != null ? Number(i.verkauf_provision) : saleProv(i); return (saleAmount(i) || 0) * p / 100; };
+  const grp = { "Hauptstange": [], "Reduziert-Stange": [], "Upcycling": [], "Among-Friends-Teile": [] };
+  sold.forEach(i => {
+    if (i.owner_id === SELF) grp["Among-Friends-Teile"].push(i);
+    else if (i.stufe === "Reduziert") grp["Reduziert-Stange"].push(i);
+    else if (i.stufe === "Upcycling") grp["Upcycling"].push(i);
+    else grp["Hauptstange"].push(i);
+  });
+  Object.keys(grp).forEach(q => {
+    const L = grp[q], self = q === "Among-Friends-Teile";
+    ist[q] = { n: L.length, chf: L.reduce((s, i) => s + (self ? (saleAmount(i) || 0) : afShare(i)) - plus(i), 0), umsatz: self ? 0 : L.reduce((s, i) => s + (saleAmount(i) || 0), 0) };
+  });
+  const zs = sold.filter(i => plus(i) > 0);
+  ist["Zuschlag Nichtmitglieder"] = { n: zs.length, chf: zs.reduce((s, i) => s + plus(i), 0) };
   const rents = RENTALS.filter(r => r.von && finMonthKey(r.von) === k);
   ist["Vermietung"] = { n: rents.length, chf: rents.reduce((s, r) => { const it = ITEMS.find(x => x.id === r.item_id); const p = it && it.owner_id === SELF ? 100 : Number(r.provision_prozent); return s + Number(r.betrag) * p / 100; }, 0), umsatz: rents.reduce((s, r) => s + Number(r.betrag), 0) };
   FIN_QUELLEN.filter(x => x.art).forEach(x => {
-    const es = FIN_E.filter(e => e.art === x.art && finMonthKey(e.datum) === k);
-    ist[x.q] = { n: es.reduce((s, e) => s + Number(e.anzahl || 0), 0), chf: es.reduce((s, e) => s + Number(e.betrag), 0) };
+    const es = FIN_E.filter(e => e.art === x.art && finMonthKey(e.datum) === k), o = ist[x.q] || { n: 0, chf: 0 };
+    ist[x.q] = Object.assign(o, { n: o.n + es.reduce((s, e) => s + Number(e.anzahl || 0), 0), chf: o.chf + es.reduce((s, e) => s + Number(e.betrag), 0) });
   });
   return ist;
 }
 function finZielChf(q, quarter) {
   const z = finZ(quarter, q); if (!z) return 0;
-  if (q === "Verkauf Owner-Teile") return z.anzahl * z.preis * 0.10;  // Provision 10 %
-  if (q === "Vermietung") return z.anzahl * z.preis * 0.30;           // Anteil 30 %
-  return z.anzahl * z.preis;
+  const x = FIN_QUELLEN.find(f => f.q === q);
+  return z.anzahl * z.preis * (x && x.pct ? x.pct / 100 : 1);
 }
 function finZielTxt(q, einheit, quarter) {
   const z = finZ(quarter, q); if (!z || (!z.anzahl && !z.preis)) return `<span class="hint">kein Ziel</span>`;
-  const extra = q === "Verkauf Owner-Teile" ? " · davon 10 %" : q === "Vermietung" ? " · davon 30 %" : "";
-  return `${z.anzahl} ${esc(einheit)} × Ø ${fchf(z.preis)}${extra}`;
+  const x = FIN_QUELLEN.find(f => f.q === q), extra = x && x.pct ? ` · davon ${x.pct} %` : "";
+  const pr = Number(z.preis) % 1 ? "CHF " + Number(z.preis).toFixed(2) : fchf(z.preis);
+  return `${z.anzahl} ${esc(einheit)} × Ø ${pr}${extra}`;
 }
 function renderFinanzen(reload) {
   const el = $("finanzen"); if (!el) return;
@@ -81,7 +98,7 @@ function renderFinanzen(reload) {
   const k = finMonat, ist = finIst(k), Q = finQ(k), mNo = finMonthNo(k);
   const rows = FIN_QUELLEN.map(x => {
     const zc = finZielChf(x.q, Q), ic = (ist[x.q] || {}).chf || 0, n = (ist[x.q] || {}).n || 0;
-    if (!zc && !ic && !finEdit && (x.q === "Mitgliedschaft" || x.q === "Anderes")) return "";
+    if (!zc && !ic && !finEdit) return "";
     const pct = zc ? Math.min(100, Math.round(ic / zc * 100)) : (ic ? 100 : 0);
     const z = finZ(Q, x.q);
     return `<tr>
@@ -92,7 +109,7 @@ function renderFinanzen(reload) {
     </tr>`;
   }).join("");
   const zSum = FIN_QUELLEN.reduce((s, x) => s + finZielChf(x.q, Q), 0), iSum = FIN_QUELLEN.reduce((s, x) => s + ((ist[x.q] || {}).chf || 0), 0);
-  const kosten = finZ(Q, "Kosten").anzahl * finZ(Q, "Kosten").preis;
+  const kosten = finZ(Q, "Kosten").anzahl * finZ(Q, "Kosten").preis, lohn = finZ(Q, "Lohn").anzahl * finZ(Q, "Lohn").preis;
   const dayPct = k === finNowKey() ? Math.round(new Date().getDate() / new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() * 100) : null;
   const me = FIN_E.filter(e => finMonthKey(e.datum) === k).sort((x, y) => String(y.datum).localeCompare(String(x.datum)));
   el.innerHTML = `
@@ -106,13 +123,14 @@ function renderFinanzen(reload) {
     <div class="finsum">
       <div><span class="lbl">Einnahmen bis jetzt</span><b>${fchf(iSum)}</b><span class="hint">Ziel ${fchf(zSum)}</span></div>
       <div><span class="lbl">Bleibt (nach Kosten ${fchf(kosten)})</span><b class="${iSum - kosten >= zSum - kosten ? "ok" : ""}">${fchf(iSum - kosten)}</b><span class="hint">Ziel ${fchf(zSum - kosten)}</span></div>
+      ${lohn ? `<div><span class="lbl">Nach Arbeitslohn (${fchf(lohn)})</span><b class="${iSum - kosten - lohn >= 0 ? "ok" : ""}">${fchf(iSum - kosten - lohn)}</b><span class="hint">Ziel ${fchf(zSum - kosten - lohn)} · ${finZ(Q, "Lohn").anzahl} h × ${fchf(finZ(Q, "Lohn").preis)}, kalkulatorisch</span></div>` : ""}
       <div><span class="lbl">Fortschritt</span><b>${zSum ? Math.round(iSum / zSum * 100) : 0} %</b><span class="hint">${dayPct != null ? `vom Monat vorbei: ${dayPct} %` : ""}</span></div>
     </div>
     <div class="fintable"><table class="fin">
       <thead><tr><th>Einnahmequelle</th><th>Ziel pro Monat (Monat ${Q * 3 - 2}–${Q * 3})</th><th>Erreicht</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <div class="rowsmall">${finEdit ? `<button class="btn primary" type="button" data-finsave>Ziele speichern</button><label style="display:inline-flex;gap:6px;align-items:center">Kosten pro Monat CHF <input type="number" min="0" step="10" id="finKost" value="${kosten}" style="width:90px"></label><label style="display:inline-flex;gap:6px;align-items:center">Startmonat <input type="month" id="finStart" value="${finStart()}"></label><button class="btn ghost" type="button" data-finedit>Abbrechen</button>` : `<button class="btn" type="button" data-finedit>Ziele anpassen</button>`}</div>
+    <div class="rowsmall">${finEdit ? `<button class="btn primary" type="button" data-finsave>Ziele speichern</button><label style="display:inline-flex;gap:6px;align-items:center">Kosten pro Monat CHF <input type="number" min="0" step="10" id="finKost" value="${kosten}" style="width:90px"></label><label style="display:inline-flex;gap:6px;align-items:center">Lohn Stunden <input type="number" min="0" step="0.5" id="finLohnH" value="${finZ(Q, "Lohn").anzahl}" style="width:80px"> × CHF <input type="number" min="0" step="1" id="finLohnP" value="${finZ(Q, "Lohn").preis}" style="width:70px"></label><label style="display:inline-flex;gap:6px;align-items:center">Startmonat <input type="month" id="finStart" value="${finStart()}"></label><button class="btn ghost" type="button" data-finedit>Abbrechen</button>` : `<button class="btn" type="button" data-finedit>Ziele anpassen</button>`}</div>
 
     ${finYear()}
     <form class="box finform" id="finForm" novalidate>
@@ -124,11 +142,11 @@ function renderFinanzen(reload) {
         <label>Datum<input id="fi-d" type="date" value="${new Date().toISOString().slice(0, 10)}"></label>
       </div>
       <label>Notiz (freiwillig)<input id="fi-t" maxlength="300" placeholder="z.B. Workshop Häkeln, 6 Personen"></label>
-      <div class="rowsmall"><button class="btn primary" type="submit">Speichern</button><span class="hint">Verkäufe und Vermietungen musst du hier nicht eintragen, die kommen automatisch.</span></div>
+      <div class="rowsmall"><button class="btn primary" type="submit">Speichern</button><span class="hint">Verkäufe, Vermietungen und den Zuschlag für Nichtmitglieder musst du hier nicht eintragen, die kommen automatisch.</span></div>
     </form>
     ${me.length ? `<div class="sec">Von Hand erfasst im ${esc(finLabel(k))}</div>
     <ul class="rlist">${me.map(e => `<li><span>${esc(String(e.datum).split("-").reverse().join("."))}</span><span><b>${esc(e.art)}</b> · ${e.anzahl}× · ${fchf(e.betrag)}${e.notiz ? `<br><span class="hint">${esc(e.notiz)}</span>` : ""}</span><span><button class="btn ghost" type="button" data-findel="${esc(e.id)}" aria-label="Eintrag löschen">✕</button></span></li>`).join("")}</ul>` : ""}
-    <p class="hint">Ziele sind deine Annahmen aus dem Finanzplan fürs erste Jahr. «Ziele anpassen» ändert die Ziele des angezeigten Quartals. Beträge vor AHV und Steuern.</p>`;
+    <p class="hint">Ziele aus dem Finanzplan (Konzept v14): Monat 1–3 vorsichtig, Monat 4–6 mittel, ab Monat 7 gut. Zeilen ohne Ziel und ohne Einnahmen werden ausgeblendet. «Ziele anpassen» ändert die Ziele des angezeigten Quartals. Beträge vor AHV und Steuern.</p>`;
 }
 /* Jahresübersicht: pro Quartal Ziel (× 3 Monate) neben dem Erreichten */
 function finYear() {
@@ -165,6 +183,7 @@ async function finSave(btn) {
   const Q = finQ(finMonat);
   const rows = FIN_QUELLEN.map(x => ({ quelle: `Q${Q}|${x.q}`, anzahl: parseFloat(document.querySelector(`[data-zn="${CSS.escape(x.q)}"]`).value) || 0, preis: parseFloat(document.querySelector(`[data-zp="${CSS.escape(x.q)}"]`).value) || 0 }));
   rows.push({ quelle: `Q${Q}|Kosten`, anzahl: 1, preis: parseFloat($("finKost").value) || 0 });
+  rows.push({ quelle: `Q${Q}|Lohn`, anzahl: parseFloat($("finLohnH").value) || 0, preis: parseFloat($("finLohnP").value) || 0 });
   const st = ($("finStart").value || "").split("-"); if (st.length === 2) rows.push({ quelle: "Start", anzahl: Number(st[0]) * 100 + Number(st[1]), preis: 0 });
   busy(btn, true);
   const { error } = await sb.from("finanz_ziele").upsert(rows);
