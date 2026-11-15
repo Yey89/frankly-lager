@@ -97,3 +97,14 @@ label.short{max-width:260px}
 /* Club-Preis (Hauptstange) */
 .clubp{display:block;font-family:var(--mono);font-size:11px;font-weight:500;color:var(--red, #E10600);text-align:right;margin-top:2px}
 .sprice .clubp{text-align:left;font-size:13px;margin-top:4px}
+
+/* Club */
+.clubprice{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0 6px}
+.clubprice div{border:2px solid var(--ink);padding:10px 16px;display:grid;gap:2px;min-width:140px}
+.clubprice b{font-size:26px;font-variant-numeric:tabular-nums}
+.clubprice span{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.perks{list-style:none;margin:18px 0;padding:0;display:grid;gap:10px;max-width:760px}
+.perks li{padding-left:22px;position:relative;line-height:1.5}
+.perks li::before{content:"";position:absolute;left:0;top:.55em;width:9px;height:9px;background:var(--red)}
+a.clubp{text-decoration:none}
+a.clubp:hover{text-decoration:underline}

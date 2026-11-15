@@ -533,12 +533,14 @@ function renderAll() {
   $("foot").innerHTML = esc(`Secondhand among Friends · ${ITEMS.length} Teile · ${LOOKS.length} Looks · ${OWNERS.length} Owner`) + (mt ? ` · <button class="btn" type="button" id="thumbBtn">${mt} Vorschaubilder erstellen</button>` : "") + (missingCuts().length ? ` · <button class="btn" type="button" id="cutBtn">${missingCuts().length} Teile in Looks freistellen</button>` : "");
 }
 function setTab(t) {
-  ["items", "looks", "owners", "anm", "finanzen", "insights", "fotoecke", "umfrage"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
+  ["items", "looks", "owners", "anm", "finanzen", "insights", "club", "fotoecke", "umfrage"].forEach(x => { $("tab-" + x).setAttribute("aria-selected", t === x); });
   $("viewFinanzen").hidden = t !== "finanzen";
   if (t === "finanzen" && window.renderFinanzen) renderFinanzen(true);
   $("viewInsights").hidden = t !== "insights";
   $("viewFotoecke").hidden = t !== "fotoecke";
   $("viewUmfrage").hidden = t !== "umfrage";
+  $("viewClub").hidden = t !== "club";
+  if (t === "club" && window.renderClub) renderClub(true);
   if (t === "umfrage" && window.renderUmfrage) renderUmfrage(true);
   if (t === "fotoecke" && window.renderFotoecke) renderFotoecke(true);
   if (t === "insights" && window.renderInsights) renderInsights();
@@ -1707,6 +1709,7 @@ document.addEventListener("click", e => {
     case "tab-anm": return setTab("anm");
     case "tab-insights": return setTab("insights");
     case "tab-finanzen": return setTab("finanzen");
+    case "tab-club": return setTab("club");
     case "tab-fotoecke": return setTab("fotoecke");
     case "tab-umfrage": return setTab("umfrage");
     case "addBtn": return showAdd();

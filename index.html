@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css?v=31">
-<link rel="stylesheet" href="shop.css?v=33">
+<link rel="stylesheet" href="shop.css?v=36">
 <link rel="stylesheet" href="outfit.css?v=31">
 </head>
 <body class="shop">
@@ -26,6 +26,7 @@
     <nav class="snav" aria-label="Hauptnavigation">
       <a href="#stoebern" data-nav="shop">Stöbern</a>
       <a href="#looks" data-nav="looks">Looks</a>
+      <a href="#club" data-nav="club">Club</a>
       <a href="#mitmachen" data-nav="join">Owner werden</a>
       <a href="#besuch" data-nav="visit">Besuch</a>
     </nav>
@@ -139,6 +140,58 @@
     </div>
   </section>
 
+  <!-- Club -->
+  <section id="v-club" class="view" hidden>
+    <h2 class="vtitle">Among Friends Club</h2>
+    <p class="lead">Zuerst sehen, zuerst kaufen und an der Hauptstange immer CHF 10 günstiger.</p>
+    <div class="clubprice"><div><b>CHF 120</b><span>pro Jahr</span></div><div><b>CHF 15</b><span>pro Monat</span></div></div>
+
+    <ul class="perks">
+      <li><b>First Access.</b> Jeden ersten Samstag im Monat von 9.30 bis 13 Uhr ist der Laden nur für Mitglieder offen.</li>
+      <li><b>Digital Preview.</b> Mitte Woche vor dem ersten Samstag bekommst du die neuen Teile per E-Mail.</li>
+      <li><b>CHF 10 günstiger.</b> Auf jedes Teil der Hauptstange.</li>
+      <li><b>Members-Only-Rack.</b> Ausgewählte Teile nur für Mitglieder.</li>
+      <li><b>24h Try-On.</b> Teile einen Tag lang zu Hause anprobieren.</li>
+      <li><b>Initialen.</b> Wir sticken deine Initialen auf bis zu 3 Stücke.</li>
+      <li><b>Ausleihen.</b> Ab Februar 10 % günstiger.</li>
+    </ul>
+
+    <ol class="steps">
+      <li><b>Anmelden.</b> Mit dem Formular unten.</li>
+      <li><b>Bezahlen.</b> Bei deinem nächsten Besuch im Laden: bar, Karte oder TWINT.</li>
+      <li><b>Dabei sein.</b> Ab dann bekommst du die Digital Preview und kommst zum First Access.</li>
+    </ol>
+
+    <form class="form joinform" id="clubForm" novalidate>
+      <fieldset>
+        <legend>Über dich</legend>
+        <div class="two">
+          <label>Vorname *<input id="c-vorname" autocomplete="given-name" required></label>
+          <label>Nachname<input id="c-nachname" autocomplete="family-name"></label>
+        </div>
+        <div class="two">
+          <label>E-Mail *<input id="c-email" type="email" autocomplete="email" required></label>
+          <label>Telefon<input id="c-telefon" type="tel" autocomplete="tel"></label>
+        </div>
+        <label>Deine Grösse (freiwillig)<select id="c-groesse"><option value="">Keine Angabe</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option></select></label>
+      </fieldset>
+      <fieldset>
+        <legend>Mitgliedschaft</legend>
+        <label class="check"><input type="radio" name="c-abo" value="Jahr" checked> CHF 120 pro Jahr</label>
+        <label class="check"><input type="radio" name="c-abo" value="Monat"> CHF 15 pro Monat</label>
+        <label class="hp" aria-hidden="true">Website<input id="c-website" tabindex="-1" autocomplete="off"></label>
+        <label class="check"><input id="c-ok" type="checkbox"> Ich bin einverstanden, dass ihr mir die Digital Preview per E-Mail schickt. Meine Angaben werden nur für den Club verwendet. *</label>
+      </fieldset>
+      <p class="err" id="clubErr" aria-live="polite"></p>
+      <button class="btn primary big-btn" id="clubBtn" type="submit">Anmelden</button>
+    </form>
+
+    <div class="done" id="clubDone" hidden>
+      <h3 class="vtitle">Danke!</h3>
+      <p class="lead">Du bist angemeldet. Bezahl bei deinem nächsten Besuch im Laden, dann bist du dabei.</p>
+    </div>
+  </section>
+
   <!-- Besuch -->
   <section id="v-visit" class="view" hidden>
     <h2 class="vtitle">Besuch</h2>
@@ -158,10 +211,10 @@
 <script>
   if (!window.supabase) document.write('<script src="https://unpkg.com/@supabase/supabase-js@2.110.1/dist/umd/supabase.js"><\/script>');
 </script>
-<script src="i18n.js?v=35"></script>
+<script src="i18n.js?v=36"></script>
 <script src="config.js?v=31"></script>
 <script src="sizes.js?v=31"></script>
 <script src="outfit.js?v=31"></script>
-<script src="shop.js?v=35"></script>
+<script src="shop.js?v=36"></script>
 </body>
 </html>

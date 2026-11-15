@@ -329,7 +329,7 @@ function showItem(nr) {
       <div>
         <div class="nr"><small>Nummer</small>${esc(it.nr)}</div>
         <h2 class="dt">${esc(it.titel)}</h2>
-        <div class="statusrow"><span class="sprice">${esc(chf(shopPrice(it)))}${isClub(it) ? `<small class="clubp">Among Friends Club ${esc(chf(it.preis))}</small>` : ""}</span>${badge(it)}${franklyPill(it)}</div>
+        <div class="statusrow"><span class="sprice">${esc(chf(shopPrice(it)))}${isClub(it) ? `<a class="clubp" href="#club" data-nav="club">Among Friends Club ${esc(chf(it.preis))} · Mitglied werden</a>` : ""}</span>${badge(it)}${franklyPill(it)}</div>
         ${it.owner_id === "OWN-001" ? `<p class="hint">Among-Friends-Teil: Hier gilt dein Fotoecke-Gutschein.</p>` : ""}
         ${it.stufe === "Upcycling" ? `<p class="hint">${t("Upcycled by Among Friends: Aus einem Secondhand-Teil neu gemacht, ein Einzelstück.")} ${(it.fotos_extra || []).some(f => f.art === "Vorher") ? t("Unter «Vorher» siehst du das Original.") : ""} ${t("Die ursprüngliche Owner bekommt einen Teil vom Preis.")}</p>` : ""}
         ${it.status === "Vermietet" ? `<p class="hint">${RENT[it.id] && RENT[it.id].bis ? t("Dieses Teil ist bis {d} vermietet und danach wieder im Laden.", { d: esc(shortDate(RENT[it.id].bis)) }) : "Dieses Teil ist gerade vermietet und bald wieder im Laden."}</p>` : ""}
@@ -439,14 +439,35 @@ function showLook(id) {
 }
 
 /* ---------- Navigation ---------- */
-const VIEWS = { shop: "v-shop", looks: "v-looks", join: "v-join", visit: "v-visit" };
-const HASH = { stoebern: "shop", looks: "looks", mitmachen: "join", besuch: "visit" };
+const VIEWS = { shop: "v-shop", looks: "v-looks", club: "v-club", join: "v-join", visit: "v-visit" };
+const HASH = { stoebern: "shop", looks: "looks", club: "club", mitmachen: "join", besuch: "visit" };
 function go(v, push) {
   Object.entries(VIEWS).forEach(([k, id]) => { $(id).hidden = k !== v; });
   document.querySelectorAll(".snav a").forEach(a => a.setAttribute("aria-current", a.dataset.nav === v ? "page" : "false"));
   if (push) { const h = Object.keys(HASH).find(k => HASH[k] === v); try { history.replaceState(null, "", h && v !== "shop" ? "#" + h : location.pathname + location.search); } catch (e) {} }
   window.scrollTo(0, 0);
 }
+
+/* ---------- Club ---------- */
+async function submitClub() {
+  const err = $("clubErr"), btn = $("clubBtn"); err.textContent = "";
+  if ($("c-website").value) return;
+  const email = $("c-email").value.trim();
+  const fehler = [];
+  if (!$("c-vorname").value.trim()) fehler.push(t("Vorname"));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fehler.push(t("E-Mail"));
+  if (!$("c-ok").checked) fehler.push(t("Zustimmung"));
+  if (fehler.length) { err.textContent = t("Bitte noch ergänzen: {x}.", { x: fehler.join(", ") }); return; }
+  btn.disabled = true; btn.textContent = t("Wird gesendet …");
+  const abo = (document.querySelector('input[name="c-abo"]:checked') || {}).value || "Jahr";
+  const { data, error } = await sb.rpc("club_anmelden", { p: { vorname: $("c-vorname").value.trim(), nachname: $("c-nachname").value.trim(), email, telefon: $("c-telefon").value.trim(), groessen: $("c-groesse").value, abo, sprache: document.documentElement.lang || "de" } });
+  btn.disabled = false; btn.textContent = t("Anmelden");
+  if (error) { err.textContent = /function|schema|club_anmelden/i.test(error.message || "") ? t("Die Anmeldung ist noch nicht offen. Bitte versuch es später nochmals.") : error.message; return; }
+  $("clubForm").hidden = true; $("clubDone").hidden = false;
+  if (data === "schon") $("clubDone").querySelector(".lead").textContent = t("Du bist schon angemeldet. Bezahl bei deinem nächsten Besuch im Laden, dann bist du dabei.");
+  window.scrollTo(0, 0);
+}
+document.addEventListener("submit", e => { if (e.target.id === "clubForm") { e.preventDefault(); submitClub(); } });
 
 /* ---------- Owner werden ---------- */
 let rentFiles = [];
