@@ -1284,12 +1284,24 @@ function showAnm(id) {
     ANM = ANM.map(x => x.id === id ? r.data : x); renderAnm(); toast("Stil gespeichert");
   });
 }
+/* E-Mails gehen über das gemeinsame Gmail-Konto (nicht über das private Mailprogramm) */
+const TEAM_MAIL = "sec.amongfriends@gmail.com";
+const AGREEMENT_URL = "https://yey89.github.io/frankly-lager/owner-agreement.pdf";
 function mailTo(to, subject, body) {
-  const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  window.location.href = href;
+  const href = `https://mail.google.com/mail/?authuser=${encodeURIComponent(TEAM_MAIL)}&view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const w = window.open(href, "_blank", "noopener");
+  if (w) return;
+  /* Browser hat das neue Fenster blockiert: Link zum Antippen zeigen */
+  const old = document.getElementById("mailLink"); if (old) old.remove();
+  const box = document.createElement("div");
+  box.id = "mailLink";
+  box.style.cssText = "position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:200;background:var(--ink);color:var(--bg);padding:12px 16px;display:flex;gap:12px;align-items:center;max-width:92vw;box-shadow:0 4px 18px rgba(0,0,0,.25)";
+  box.innerHTML = `<span>E-Mail ist fertig.</span><a class="btn primary" href="${esc(href)}" target="_blank" rel="noopener">In Gmail öffnen</a><button class="btn ghost" type="button" style="color:inherit">×</button>`;
+  box.addEventListener("click", e => { if (e.target.closest("a,button")) setTimeout(() => box.remove(), 50); });
+  document.body.appendChild(box);
 }
-const GRUSS = "\n\nLiebe Grüsse\nYesim · Secondhand among Friends";
-const RENT_YES = "Auch deine Vermiet-Teile nehmen wir gerne auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.";
+const GRUSS = "\n\nLiebe Grüsse\nYesim und Anastasia · Secondhand among Friends";
+const RENT_YES = "Auch deine Vermiet-Teile nehmen wir gerne auf! Von jeder Miete bekommst du 60 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.";
 const RENT_NO = "Deine Vermiet-Teile passen diesmal leider nicht in unser Vermiet-Angebot.";
 /* rent: true = Vermieten zugesagt, false = abgesagt, null = nichts dazu schreiben */
 function anmMail(kind, a, monat, text, rent, rentText) {
@@ -1297,11 +1309,28 @@ function anmMail(kind, a, monat, text, rent, rentText) {
   const rentPart = rent === true ? RENT_YES + (rentText ? " " + rentText : "") + "\n\n" : rent === false ? RENT_NO + (rentText ? " " + rentText : "") + "\n\n" : "";
   if (kind === "accept") {
     const m = parseD(monat), fs = firstSat(m.getFullYear(), m.getMonth()), ls = lastSat(m.getFullYear(), m.getMonth());
-    return ["Du bist dabei bei Secondhand among Friends", hi + `schön, dass du mitmachst! Du bist für ${monthLabel(monat)} dabei. Die Runde läuft vom ${fmt(fs)} bis ${fmt(ls)}.\n\nBitte bring deine Teile (maximal 10${rent === true ? ", plus deine Vermiet-Teile" : ""}) vor Rundenbeginn vorbei:\n${SHOP_ADR}\n\n` + rentPart + (text ? text + "\n\n" : "") + `Von jedem Verkauf bekommst du 90 %, ausbezahlt am Ende der Runde.` + GRUSS];
+    const abgabe = lastSat(m.getFullYear(), m.getMonth() - 1);
+    const zahl = new Date(ls); zahl.setDate(zahl.getDate() + 7);
+    const body = hi + `schön, dass du mitmachst! Du bist in der Runde ${monthLabel(monat)} dabei.
+
+Deine Daten:
+- Abgabe deiner Teile: ${fmt(abgabe)}, mit Termin (ca. 30 Minuten), ${SHOP_ADR}
+- Verkauf im Laden und online: ${fmt(fs)} bis ${fmt(ls)}
+- Abholung, was nicht verkauft ist: ${fmt(ls)}, 17 bis 18 Uhr
+- Auszahlung per TWINT: bis ${fmt(zahl)}
+
+Bitte lies unser Owner Agreement durch. Dort steht genau, wie es funktioniert: Preise, dein Anteil, was mit unverkauften Teilen passiert und die Auszahlung. Es ist auf Deutsch und Englisch:
+${AGREEMENT_URL}
+
+` + rentPart + (text ? text + "\n\n" : "") + `Wenn du einverstanden bist, antworte bitte auf diese E-Mail mit dem Satz:
+«Ich habe das Owner Agreement gelesen, verstanden und bin einverstanden.»
+
+Danach schicken wir dir einen Zeitvorschlag für die Abgabe.` + GRUSS;
+    return [`Du bist dabei: Secondhand among Friends · ${monthLabel(monat)}`, body];
   }
   if (kind === "wait") return ["Deine Anmeldung bei Secondhand among Friends", hi + `danke für deine Anmeldung bei Secondhand among Friends! ${monat ? `Für ${monthLabel(monat)} sind wir leider schon voll. ` : ""}Wir haben dich auf die Warteliste gesetzt und melden uns, sobald ein Platz frei wird.\n\n` + rentPart + (text || "") + GRUSS];
   if (kind === "reject") return ["Deine Anmeldung bei Secondhand among Friends", hi + `vielen Dank für dein Interesse an Secondhand among Friends und für deine Anmeldung. Leider können wir dich diesmal nicht aufnehmen${a.vermieten ? ", auch nicht mit den Vermiet-Teilen" : ""}.\n\n` + (text || "") + GRUSS];
-  if (kind === "rent-yes") return ["Vermieten bei Secondhand among Friends: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 70 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.\n\n` + (text || "") + GRUSS];
+  if (kind === "rent-yes") return ["Vermieten bei Secondhand among Friends: Zusage", hi + `gute Nachrichten: Wir nehmen deine Teile gerne zum Vermieten auf! Von jeder Miete bekommst du 60 %. Die Mieterin hinterlegt eine Kaution und bringt das Teil gereinigt mit Quittung zurück.\n\n` + (text || "") + GRUSS];
   if (kind === "rent-no") return ["Vermieten bei Secondhand among Friends", hi + `danke für deine Fotos! Leider passen deine Teile diesmal nicht in unser Vermiet-Angebot.\n\n` + (text || "") + GRUSS];
 }
 async function patchAnm(id, patch, msg) {
@@ -1337,7 +1366,7 @@ async function anmAction(kind, btn) {
   const needsText = kind === "reject";
   const withMonth = kind === "accept" || kind === "wait";
   const label = { accept: "Annehmen", wait: "Auf Warteliste setzen", reject: "Absage", "rent-yes": "Vermieten zusagen", "rent-no": "Vermieten absagen" }[kind];
-  const ph = { accept: "Optional: persönliche Ergänzung, z.B. Abgabetermin", wait: "Was du ihr noch sagen möchtest (optional)", reject: "Warum? Kurz und freundlich, z.B. Stil oder Grössen passen diesen Monat nicht.", "rent-yes": "Optional: wie es weitergeht, z.B. wann sie die Teile bringen kann", "rent-no": "Optional: Grund" }[kind];
+  const ph = { accept: "Optional: persönliche Ergänzung", wait: "Was du ihr noch sagen möchtest (optional)", reject: "Warum? Kurz und freundlich, z.B. Stil oder Grössen passen diesen Monat nicht.", "rent-yes": "Optional: wie es weitergeht, z.B. wann sie die Teile bringen kann", "rent-no": "Optional: Grund" }[kind];
   const el = $("act");
   el.innerHTML = `<form class="box actform" id="actForm" novalidate>
     <div class="sec" style="margin:0">${label}</div>
@@ -1350,7 +1379,7 @@ async function anmAction(kind, btn) {
       <label>Zum Vermieten (optional)<input id="m-renttext" placeholder="z.B. Das rote Abendkleid passt super, das blaue leider nicht."></label>
     </fieldset>` : ""}
     <label>${needsText ? "Grund *" : "Dein Text"}<textarea id="m-text" rows="4" placeholder="${esc(ph)}"></textarea></label>
-    <p class="hint">Danach öffnet sich dein Mailprogramm mit einer fertigen E-Mail an ${esc(a.email)}. Du kannst sie vor dem Senden noch anpassen.</p>
+    <p class="hint">Danach öffnet sich Gmail (${TEAM_MAIL}) mit einer fertigen E-Mail an ${esc(a.email)}${kind === "accept" ? ", mit Link zum Owner Agreement" : ""}. Du kannst sie vor dem Senden noch anpassen.</p>
     <div class="rowsmall"><button class="btn primary" type="submit">Speichern & E-Mail öffnen</button><button class="btn" type="button" data-aact="save-only">Nur speichern</button><button class="btn ghost" type="button" data-aact="cancel">Abbrechen</button></div>
   </form>`;
   el.scrollIntoView({ block: "nearest" });
