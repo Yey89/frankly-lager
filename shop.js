@@ -10,7 +10,8 @@ const SHOP = {
   ort: "Josy · Zentrum für Kreislaufwirtschaft",
   strasse: "Neue Hard 10",
   plz: "8005 Zürich",
-  zeiten: [["Mi – Fr", "13.00 – 19.00 Uhr"], ["Sa", "9.30 – 17.00 Uhr"], ["So – Di", "geschlossen"]],
+  zeiten: [["Mi", "13.00 – 19.00 Uhr"], ["Fr", "13.00 – 19.00 Uhr"], ["Sa", "9.30 – 17.00 Uhr"]],
+  club: "Erster Samstag im Monat: 9.30 – 13.00 Uhr nur für Club-Mitglieder, ab 13.00 Uhr für alle.",
   maps: "https://www.google.com/maps/search/?api=1&query=Neue+Hard+10+8005+Z%C3%BCrich"
 };
 /* Stil-Kacheln fürs Anmeldeformular. Eigene Fotos: Datei in den Ordner "stile/" legen. */
@@ -77,7 +78,7 @@ function badge(it) {
 /* ---------- Ladeninfos anzeigen ---------- */
 function renderInfo() {
   const hours = SHOP.zeiten.map(([d, z]) => `<tr><th>${esc(d)}</th><td>${esc(z)}</td></tr>`).join("");
-  $("whereLine").innerHTML = `Im Laden: <b>${esc(SHOP.strasse)}, ${esc(SHOP.plz)}</b> · ${esc(SHOP.zeiten.slice(0, 2).map(z => z.join(" ")).join(" · "))}`;
+  $("whereLine").innerHTML = `Im Laden: <b>${esc(SHOP.strasse)}, ${esc(SHOP.plz)}</b> · ${esc(SHOP.zeiten.map(z => z.join(" ")).join(" · "))}`;
   $("visit").innerHTML = `
     <div class="vblock">
       <span class="klabel">Adresse</span>
@@ -87,6 +88,7 @@ function renderInfo() {
     <div class="vblock">
       <span class="klabel">Öffnungszeiten</span>
       <table class="hours">${hours}</table>
+      <p class="hint">${esc(SHOP.club)}</p>
     </div>`;
   $("footInfo").innerHTML = `<b>Secondhand among Friends</b> · ${esc(SHOP.strasse)}, ${esc(SHOP.plz)} · <a href="https://www.instagram.com/s.amongfriends/" target="_blank" rel="noopener">@s.amongfriends</a>`;
 }
@@ -311,7 +313,7 @@ function setParam(nr) {
 }
 function visitBox() {
   return `<div class="box"><span class="klabel">Anprobieren im Laden</span>
-    <p class="pline"><b>${esc(SHOP.strasse)}, ${esc(SHOP.plz)}</b><br>${SHOP.zeiten.slice(0, 2).map(([d, z]) => `${esc(d)} ${esc(z)}`).join("<br>")}</p></div>`;
+    <p class="pline"><b>${esc(SHOP.strasse)}, ${esc(SHOP.plz)}</b><br>${SHOP.zeiten.map(([d, z]) => `${esc(d)} ${esc(z)}`).join("<br>")}</p></div>`;
 }
 function showItem(nr) {
   const it = ITEMS.find(x => x.nr === nr);
