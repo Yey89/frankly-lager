@@ -1254,9 +1254,7 @@ function showAnm(id) {
       <dt>Was dabei ist</dt><dd>${esc((a.kategorien || []).join(", ") || "–")}</dd>
       <dt>Grösse oben</dt><dd>${esc(a.groesse_oben || "–")}</dd>
       <dt>Grösse unten</dt><dd>${esc(a.groesse_unten || "–")}</dd>
-      <dt>Schuhe</dt><dd>${esc(a.schuhgroesse || "keine")}</dd>
-      <dt>Stil (ihre Wahl)</dt><dd>${(a.stile || []).map(s => `<span class="pill">${esc(s)}</span>`).join(" ") || "–"}</dd>
-      <dt>Stil (deine Einschätzung)</dt><dd><select id="a-stil"><option value="">wie ihre Wahl</option>${STYLES.map(s => `<option ${s === a.stil_frankly ? "selected" : ""}>${s}</option>`).join("")}</select></dd>
+      <dt>Stil</dt><dd>${(a.stile || []).map(s => `<span class="pill">${esc(s)}</span>`).join(" ") || "–"}</dd>
       ${a.nachricht ? `<dt>Nachricht</dt><dd>${esc(a.nachricht)}</dd>` : ""}
     </dl>
     ${a.vermieten ? `<div class="box ${a.vermieten_ok == null ? "alert" : ""}">
@@ -1278,7 +1276,7 @@ function showAnm(id) {
     ${a.status_grund ? `<div class="box"><div class="sec" style="margin:0 0 6px">Letzte Nachricht</div><p class="pline">${esc(a.status_grund)}</p></div>` : ""}
     <div class="row"><button class="btn danger" type="button" data-aact="delete">Anmeldung löschen</button></div>
   `, { type: "anm", id });
-  $("a-stil").addEventListener("change", async () => {
+  if ($("a-stil")) $("a-stil").addEventListener("change", async () => {
     const r = await sb.from("anmeldungen").update({ stil_frankly: $("a-stil").value || null }).eq("id", id).select().single();
     if (r.error) return toast(nice(r.error), 4500);
     ANM = ANM.map(x => x.id === id ? r.data : x); renderAnm(); toast("Stil gespeichert");
@@ -1378,13 +1376,13 @@ async function anmAction(kind, btn) {
       ${kind === "wait" ? `<label class="check"><input type="radio" name="m-rent" value="later" ${a.vermieten_ok == null ? "checked" : ""}> Später entscheiden</label>` : ""}
       <label>Zum Vermieten (optional)<input id="m-renttext" placeholder="z.B. Das rote Abendkleid passt super, das blaue leider nicht."></label>
     </fieldset>` : ""}
-    <label>${needsText ? "Grund *" : "Dein Text"}<textarea id="m-text" rows="4" placeholder="${esc(ph)}"></textarea></label>
+    ${kind === "accept" ? "" : `<label>${needsText ? "Grund *" : "Dein Text"}<textarea id="m-text" rows="4" placeholder="${esc(ph)}"></textarea></label>`}
     <p class="hint">Danach öffnet sich Gmail (${TEAM_MAIL}) mit einer fertigen E-Mail an ${esc(a.email)}${kind === "accept" ? ", mit Link zum Owner Agreement" : ""}. Du kannst sie vor dem Senden noch anpassen.</p>
-    <div class="rowsmall"><button class="btn primary" type="submit">Speichern & E-Mail öffnen</button><button class="btn" type="button" data-aact="save-only">Nur speichern</button><button class="btn ghost" type="button" data-aact="cancel">Abbrechen</button></div>
+    <div class="rowsmall"><button class="btn primary" type="submit">${kind === "accept" ? "Annehmen & E-Mail öffnen" : "Speichern & E-Mail öffnen"}</button><button class="btn" type="button" data-aact="save-only">Nur speichern</button><button class="btn ghost" type="button" data-aact="cancel">Abbrechen</button></div>
   </form>`;
   el.scrollIntoView({ block: "nearest" });
   const run = async (sendMail, b) => {
-    const text = $("m-text").value.trim(), monat = withMonth ? $("m-monat").value : null;
+    const text = $("m-text") ? $("m-text").value.trim() : "", monat = withMonth ? $("m-monat").value : null;
     if (needsText && !text) return toast("Bitte einen Grund eingeben.");
     const rv = (document.querySelector('input[name="m-rent"]:checked') || {}).value;
     if (a.vermieten && kind === "accept" && !rv) return toast("Bitte zuerst die Vermiet-Teile prüfen: zusagen oder absagen.", 4500);
